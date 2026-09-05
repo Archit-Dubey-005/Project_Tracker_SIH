@@ -3,31 +3,56 @@ require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
 
 const mysql = require('mysql2/promise');
 
+const connectionUrl = process.env.DATABASE_URL || process.env.MYSQL_URL;
+
 const host = process.env.DB_HOST || 'localhost';
 const user = process.env.DB_USER || 'root';
 const password = process.env.DB_PASSWORD !== undefined ? String(process.env.DB_PASSWORD) : '';
 const database = process.env.DB_NAME || 'progress_tracker';
 const port = Number(process.env.DB_PORT) || 3306;
 
-console.log(`[MySQL Config] Connecting to ${user}@${host}:${port}/${database} (Password set: ${password ? 'YES' : 'NO'})`);
+let pool;
 
-const pool = mysql.createPool({
-  host,
-  user,
-  password,
-  database,
-  port,
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0,
-});
+if (connectionUrl) {
+  console.log(`[MySQL Config] Connecting using DATABASE_URL`);
+  pool = mysql.createPool({
+    uri: connectionUrl,
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0,
+    ssl: process.env.DB_SSL === 'false' ? false : { rejectUnauthorized: false },
+  });
+} else {
+  console.log(`[MySQL Config] Connecting to ${user}@${host}:${port}/${database} (Password set: ${password ? 'YES' : 'NO'})`);
+  pool = mysql.createPool({
+    host,
+    user,
+    password,
+    database,
+    port,
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0,
+    ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
+  });
+}
+
+function getPool() {
+  return pool;
+}
 
 // Auto-create database & migrate schema tables/columns if needed
 (async () => {
   try {
-    const rootConn = await mysql.createConnection({ host, user, password, port });
-    await rootConn.query(`CREATE DATABASE IF NOT EXISTS \`${database}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
-    await rootConn.end();
+    if (!connectionUrl) {
+      try {
+        const rootConn = await mysql.createConnection({ host, user, password, port });
+        await rootConn.query(`CREATE DATABASE IF NOT EXISTS \`${database}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
+        await rootConn.end();
+      } catch (err) {
+        // Ignored if user lacks root privilege or DB already exists
+      }
+    }
 
     const conn = await pool.getConnection();
     await conn.query('SET FOREIGN_KEY_CHECKS = 0');
@@ -107,6 +132,7 @@ const pool = mysql.createPool({
     `);
 
     try { await conn.query(`ALTER TABLE matches ADD COLUMN similarity_score DOUBLE DEFAULT 0.0`); } catch (_) {}
+
     // Ensure uniform collation across all tables to prevent JOIN collation mismatch
     const tables = ['users', 'activities', 'raw_entries', 'extracted_events', 'matches', 'audit_log'];
     for (const t of tables) {
@@ -115,7 +141,7 @@ const pool = mysql.createPool({
 
     await conn.query('SET FOREIGN_KEY_CHECKS = 1');
     conn.release();
-    console.log(`Connected successfully to MySQL database "${database}" at ${host}:${port}`);
+    console.log(`Connected successfully to MySQL database`);
   } catch (err) {
     if (err.code === 'ER_ACCESS_DENIED_ERROR') {
       console.error(`\n[MySQL Auth Error] ${err.message}`);
@@ -128,4 +154,5 @@ const pool = mysql.createPool({
   }
 })();
 
+pool.getPool = getPool;
 module.exports = pool;
