@@ -1,0 +1,257 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Task Confirmation &amp; Supervisor Approval</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar" id="topbar"></header>
+  <main>
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:16px; margin-bottom:20px;">
+      <div>
+        <h1 style="margin-bottom:4px;">Task Confirmation &amp; Supervisor Approval</h1>
+        <p class="sub" style="margin:0;">Extracted field tasks ordered from <b>low to high confidence</b>. Review and approve AI-extracted activities to confirm baseline schedule updates.</p>
+      </div>
+      <div id="disciplineNotice" style="align-self:center;"></div>
+    </div>
+
+    <!-- Filter & Ordering Toolbar -->
+    <div class="card" style="padding:16px; margin-bottom:24px;">
+      <div class="row" style="gap:16px; align-items:center; flex-wrap:wrap;">
+        <div style="flex:1; min-width:200px;">
+          <label style="margin-bottom:4px;">Ordering / Sort Priority</label>
+          <select id="sortOrder" onchange="loadApprovalTasks()">
+            <option value="low_first" selected>Low to High Confidence Score (Attention Required First) ⚡</option>
+            <option value="high_first">High to Low Confidence Score</option>
+          </select>
+        </div>
+
+        <div style="flex:1; min-width:180px;">
+          <label style="margin-bottom:4px;">Filter Status</label>
+          <select id="statusFilter" onchange="loadApprovalTasks()">
+            <option value="pending" selected>Pending Supervisor Approval</option>
+            <option value="flagged_new">Flagged New (No Match)</option>
+            <option value="confirmed">Confirmed / Approved</option>
+            <option value="rejected">Rejected</option>
+            <option value="">All Statuses</option>
+          </select>
+        </div>
+
+        <div style="flex:1; min-width:180px;" id="disciplineFilterBox">
+          <label style="margin-bottom:4px;">Filter Discipline</label>
+          <select id="disciplineFilter" onchange="loadApprovalTasks()">
+            <option value="">All Disciplines</option>
+            <option value="civil">Civil</option>
+            <option value="piping">Piping</option>
+            <option value="electrical">Electrical</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tasks List Container -->
+    <div id="tasksList">
+      <div class="card muted" style="text-align:center; padding:30px;">Loading tasks for approval...</div>
+    </div>
+  </main>
+
+  <script src="app.js"></script>
+  <script>
+    (async () => {
+      await renderTopbar('approval.html');
+      const user = State.user;
+      if (user && user.role === 'supervisor' && user.discipline) {
+        const discBox = document.getElementById('disciplineFilterBox');
+        discBox.innerHTML = `
+          <label style="margin-bottom:4px;">Discipline</label>
+          <input type="text" value="${escapeHtml(user.discipline.toUpperCase())} (Supervisor)" disabled style="background:rgba(255,255,255,0.04);" />
+        `;
+        document.getElementById('disciplineNotice').innerHTML = `
+          <span class="badge" style="background:rgba(59,130,246,0.15); color:var(--accent); font-size:12px; padding:6px 12px;">
+            🔒 Locked to ${user.discipline.toUpperCase()} Supervisor Queue
+          </span>
+        `;
+      }
+      loadApprovalTasks();
+    })();
+
+    async function loadApprovalTasks() {
+      const container = document.getElementById('tasksList');
+      const sort = document.getElementById('sortOrder').value;
+      const status = document.getElementById('statusFilter').value;
+      const user = State.user;
+      
+      let disc = '';
+      if (user && user.role === 'supervisor' && user.discipline) {
+        disc = user.discipline;
+      } else {
+        const sel = document.getElementById('disciplineFilter');
+        if (sel) disc = sel.value;
+      }
+
+      const params = new URLSearchParams();
+      if (sort) params.append('sort', sort);
+      if (status) params.append('status', status);
+      if (disc) params.append('discipline', disc);
+
+      try {
+        const tasks = await api('/review?' + params.toString());
+        if (!tasks.length) {
+          container.innerHTML = `
+            <div class="card" style="text-align:center; padding:40px; color:var(--muted)">
+              <div style="font-size:32px; margin-bottom:8px;">🎉</div>
+              <b style="font-size:16px; color:var(--fg)">No tasks match the selected filter</b>
+              <p style="font-size:13px; margin-top:4px;">All extracted events for this selection have been approved or processed.</p>
+            </div>`;
+          return;
+        }
+
+        container.innerHTML = tasks.map(t => renderTaskCard(t)).join('');
+      } catch (err) {
+        container.innerHTML = `
+          <div class="card bad-bg" style="color:var(--bad)">
+            <b>Error loading approval queue:</b> ${escapeHtml(err.message)}
+          </div>`;
+      }
+    }
+
+    function renderTaskCard(t) {
+      const confPct = Math.round((t.extraction_confidence || 0) * 100);
+      const matchPct = Math.round((t.similarity_score || 0) * 100);
+
+      // Color coding confidence
+      let confColor = 'var(--bad)';
+      let confLabel = 'Low Confidence (Review Carefully)';
+      if (confPct >= 80) {
+        confColor = 'var(--good)';
+        confLabel = 'High Confidence';
+      } else if (confPct >= 50) {
+        confColor = 'var(--warn)';
+        confLabel = 'Medium Confidence';
+      }
+
+      const isPending = t.status === 'pending' || t.status === 'flagged_new';
+
+      return `
+        <div class="card" id="card-${t.match_id}" style="margin-bottom:16px; border-left: 4px solid ${confColor};">
+          <!-- Card Header / Metadata -->
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px; margin-bottom:12px;">
+            <div>
+              <span class="badge" style="background:rgba(59,130,246,0.15); color:var(--accent); font-weight:700; font-size:11px;">
+                ${escapeHtml(t.discipline ? t.discipline.toUpperCase() : 'GENERAL')}
+              </span>
+              <span class="badge ${t.status}" style="margin-left:6px; font-size:11px;">
+                ${escapeHtml(t.status.replace('_', ' '))}
+              </span>
+              <span class="muted" style="font-size:12px; margin-left:8px;">
+                Source: ${escapeHtml(t.source_type)} ${t.file_name ? '(' + escapeHtml(t.file_name) + ')' : ''} · Submitted by ${escapeHtml(t.submitted_by_name || 'System')}
+              </span>
+            </div>
+
+            <!-- Confidence Badge -->
+            <div style="text-align:right;">
+              <div style="font-size:12px; font-weight:700; color:${confColor};">
+                Extraction Confidence: ${confPct}%
+              </div>
+              <span class="muted" style="font-size:11px;">${confLabel}</span>
+            </div>
+          </div>
+
+          <!-- Extraction Bar & Extracted Activity Text -->
+          <div style="background:rgba(0,0,0,0.25); border:1px solid var(--border); border-radius:8px; padding:12px; margin-bottom:14px;">
+            <div style="font-size:11px; color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px;">
+              Extracted Task Event
+            </div>
+            <div style="font-size:16px; font-weight:700; color:var(--fg); margin-bottom:6px;">
+              "${escapeHtml(t.activity_description)}"
+            </div>
+            <div style="font-size:12px; display:flex; gap:16px; color:var(--muted);">
+              <span><b>Event Type:</b> <span style="color:var(--accent); font-weight:600;">${escapeHtml(t.event_type)}</span></span>
+              <span><b>Report Date:</b> ${escapeHtml(t.extracted_date || 'N/A')}</span>
+            </div>
+            ${t.raw_text ? `<div style="font-size:11px; color:var(--muted); margin-top:6px; font-style:italic;">Raw input: "${escapeHtml(t.raw_text.length > 120 ? t.raw_text.substring(0,120) + '...' : t.raw_text)}"</div>` : ''}
+          </div>
+
+          <!-- Baseline Match Proposal -->
+          <div style="margin-bottom:16px;">
+            <div style="font-size:12px; font-weight:600; color:var(--muted); margin-bottom:6px;">
+              Baseline Schedule Match Proposal:
+            </div>
+            ${t.matched_wbs_code ? `
+              <div style="display:flex; align-items:center; justify-content:space-between; background:rgba(34,197,94,0.08); border:1px solid rgba(34,197,94,0.2); border-radius:6px; padding:10px 14px;">
+                <div>
+                  <span style="font-family:monospace; font-weight:700; color:var(--good); font-size:13px;">[${escapeHtml(t.matched_wbs_code)}]</span>
+                  <span style="font-weight:600; margin-left:6px; font-size:14px;">${escapeHtml(t.matched_wbs_description)}</span>
+                </div>
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <div class="score-bar" style="width:80px;">
+                    <div class="score-fill" style="width:${matchPct}%; background:var(--good);"></div>
+                  </div>
+                  <span style="font-size:12px; font-weight:700; color:var(--good);">${matchPct}% Match</span>
+                </div>
+              </div>
+            ` : `
+              <div style="background:rgba(239,68,68,0.08); border:1px solid rgba(239,68,68,0.2); border-radius:6px; padding:10px 14px; color:var(--bad); font-size:13px;">
+                <b>No automatic baseline candidate match found.</b> Consider flagging as a new activity or assigning manually.
+              </div>
+            `}
+          </div>
+
+          <!-- Supervisor Approval Actions -->
+          ${isPending ? `
+            <div style="display:flex; gap:10px; flex-wrap:wrap; border-top:1px solid var(--border); padding-top:14px;">
+              ${t.matched_wbs_code ? `
+                <button type="button" onclick="approveTask('${t.match_id}')" style="background:var(--good); color:#000; font-weight:700; padding:8px 16px;">
+                  ✅ Approve &amp; Link Task
+                </button>
+              ` : ''}
+              <button type="button" class="secondary" onclick="flagTaskNew('${t.match_id}')" style="padding:8px 14px;">
+                🆕 Flag as New Activity
+              </button>
+              <button type="button" class="secondary" onclick="rejectTask('${t.match_id}')" style="border-color:var(--bad); color:var(--bad); padding:8px 14px; margin-left:auto;">
+                ❌ Reject Task
+              </button>
+            </div>
+          ` : `
+            <div style="font-size:12px; color:var(--muted); font-style:italic; border-top:1px solid var(--border); padding-top:10px;">
+              This task was already evaluated (${escapeHtml(t.status)}).
+            </div>
+          `}
+        </div>
+      `;
+    }
+
+    async function approveTask(id) {
+      try {
+        await api(`/review/${id}/accept`, { method: 'POST' });
+        toast('Task approved & baseline schedule updated!');
+        loadApprovalTasks();
+      } catch (err) {
+        toast(err.message);
+      }
+    }
+
+    async function rejectTask(id) {
+      if (!confirm('Are you sure you want to reject this extracted task?')) return;
+      try {
+        await api(`/review/${id}/reject`, { method: 'POST' });
+        toast('Task rejected.');
+        loadApprovalTasks();
+      } catch (err) {
+        toast(err.message);
+      }
+    }
+
+    async function flagTaskNew(id) {
+      try {
+        await api(`/review/${id}/flag-new`, { method: 'POST' });
+        toast('Flagged as new activity for planner baseline setup.');
+        loadApprovalTasks();
+      } catch (err) {
+        toast(err.message);
+      }
+    }
+  </script>
+</body>
+</html>

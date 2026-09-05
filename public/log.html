@@ -1,0 +1,121 @@
+
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Log Progress</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar" id="topbar"></header>
+  <main>
+    <h1>Log Progress</h1>
+    <p class="sub">Type (or paste) a field report, or upload a discipline spreadsheet. Both flow through the same extraction + matching pipeline.</p>
+
+    <div class="card">
+      <div class="row">
+        <button id="modeText">Text entry</button>
+        <button id="modeFile" class="secondary">Spreadsheet upload</button>
+      </div>
+
+      <div id="textForm">
+        <label>Discipline</label>
+        <select id="discipline">
+          <option value="civil">Civil</option>
+          <option value="piping">Piping</option>
+          <option value="electrical">Electrical</option>
+        </select>
+        <label>Report date</label>
+        <input type="date" id="reportDate" />
+        <label>Field report</label>
+        <textarea id="reportText" rows="4" placeholder="e.g. Erected spool on line 24 today, north header. Also started rebar fixing on F-12."></textarea>
+        <button id="submitText">Submit</button>
+      </div>
+
+      <div id="fileForm" style="display:none">
+        <label>Discipline</label>
+        <select id="fileDiscipline">
+          <option value="civil">Civil</option>
+          <option value="piping">Piping</option>
+          <option value="electrical">Electrical</option>
+        </select>
+        <label>Spreadsheet file (.xlsx / .csv)</label>
+        <input type="file" id="fileInput" accept=".xlsx,.csv,.xls" />
+        <p class="sub">Expected columns (any casing/order): Activity / Task Desc, Date / Finish, Remarks / Status. No mapping UI in this prototype — extend via the <code>mapping</code> field for real contractor sheets.</p>
+        <button id="submitFile">Upload &amp; extract</button>
+      </div>
+    </div>
+
+    <div id="results"></div>
+  </main>
+  <script src="app.js"></script>
+  <script>
+    (async () => {
+      await renderTopbar('log.html');
+      initDisciplineLocks();
+    })();
+
+    function initDisciplineLocks() {
+      const user = State.user;
+      if (!user) return;
+
+      const discSelect = document.getElementById('discipline');
+      const fileDiscSelect = document.getElementById('fileDiscipline');
+
+      if (user.role === 'supervisor' && user.discipline) {
+        discSelect.value = user.discipline;
+        discSelect.disabled = true;
+        fileDiscSelect.value = user.discipline;
+        fileDiscSelect.disabled = true;
+
+        const lockNotice = `<span class="badge" style="background:rgba(234,179,8,0.15); color:var(--warn); margin-left:8px; font-size:11px;">🔒 Locked to ${user.discipline.toUpperCase()} Supervisor</span>`;
+        if (discSelect.previousElementSibling) discSelect.previousElementSibling.innerHTML += lockNotice;
+        if (fileDiscSelect.previousElementSibling) fileDiscSelect.previousElementSibling.innerHTML += lockNotice;
+      }
+    }
+
+    document.getElementById('modeText').onclick = () => { document.getElementById('textForm').style.display=''; document.getElementById('fileForm').style.display='none'; };
+    document.getElementById('modeFile').onclick = () => { document.getElementById('textForm').style.display='none'; document.getElementById('fileForm').style.display=''; };
+
+    document.getElementById('submitText').onclick = async () => {
+      const text = document.getElementById('reportText').value.trim();
+      if (!text) return toast('Enter a report first');
+      try {
+        const res = await api('/log', { method: 'POST', body: JSON.stringify({
+          text, discipline: document.getElementById('discipline').value,
+          report_date: document.getElementById('reportDate').value || null,
+        })});
+        renderResults(res.results);
+        toast(`Extracted ${res.results.length} event(s)`);
+      } catch (e) { toast(e.message); }
+    };
+
+    document.getElementById('submitFile').onclick = async () => {
+      const file = document.getElementById('fileInput').files[0];
+      if (!file) return toast('Choose a file first');
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('discipline', document.getElementById('fileDiscipline').value);
+      try {
+        const res = await api('/ingest/upload', { method: 'POST', body: fd });
+        renderResults(res.results);
+        toast(`Batch parsed: ${res.events_created}/${res.rows_parsed} rows extracted`);
+      } catch (e) { toast(e.message); }
+    };
+
+    function renderResults(results) {
+      const el = document.getElementById('results');
+      if (!results.length) { el.innerHTML = '<div class="card muted">No events extracted.</div>'; return; }
+      el.innerHTML = '<div class="card"><b>Extracted &amp; matched (auto-saved to review queue):</b>' +
+        results.map(r => `
+          <div class="result-item">
+            <div><b>${r.event.activity_description}</b> <span class="badge ${r.status}">${r.status}</span></div>
+            <div class="muted" style="font-size:12px">${r.event.event_type} · ${r.event.extracted_date} · extraction confidence ${(r.event.extraction_confidence*100).toFixed(0)}%</div>
+            ${r.candidates.length ? `<div style="margin-top:6px">Top match: <b>${r.candidates[0].wbs_code}</b> — ${r.candidates[0].description} <span class="muted">(${(r.candidates[0].score*100).toFixed(0)}% similar)</span></div>`
+              : '<div class="muted" style="margin-top:6px">No plausible match — flagged for planner review.</div>'}
+          </div>`).join('') +
+        '</div>';
+    }
+  </script>
+</body>
+</html>

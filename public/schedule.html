@@ -1,0 +1,228 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Schedule (WBS) — Progress Tracker</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar" id="topbar"></header>
+  <main>
+    <h1>Schedule (Baseline WBS)</h1>
+    <p class="sub">Hierarchical Work Breakdown Structure (L1 → L3 → L5/L6). Planned dates are imported from Primavera/MSP; actual dates update via confirmed match reviews.</p>
+
+    <!-- Master Schedule Upload Section (Admin / Planner) -->
+    <div class="card" id="importCard" style="display:none; border-left: 4px solid var(--accent); background: linear-gradient(180deg, #131d2e 0%, #111827 100%);">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:8px;">
+        <div>
+          <b style="font-size:16px;">Master Schedule Upload &amp; Baseline Import (Admin Access)</b>
+          <p class="sub" style="margin-top:2px;">Upload a master project baseline schedule file (.xlsx / .csv). Once uploaded, the schedule is saved into the database and visible across all discipline views (Civil, Piping, Electrical, etc.).</p>
+        </div>
+        <button type="button" class="secondary" onclick="downloadMasterTemplate()" style="font-size:12px; padding:6px 12px; margin:0;">📥 Download Sample CSV Template</button>
+      </div>
+
+      <div class="row" style="margin-top:14px; gap:12px; align-items:center; flex-wrap:wrap;">
+        <input type="file" id="baselineFile" accept=".xlsx,.csv" style="flex:2; min-width:240px;" />
+        <button type="button" id="importBtn" style="padding:8px 18px;">
+          📤 Upload &amp; Publish Master Schedule
+        </button>
+        <button type="button" class="secondary" id="seedMasterBtn" style="padding:8px 14px;" title="Reset or restore default multi-discipline baseline">
+          ⚡ Reset Multi-Discipline Master Baseline
+        </button>
+      </div>
+    </div>
+
+    <div class="card" style="padding: 14px 20px;">
+      <div class="row" style="align-items: center; justify-content: space-between;">
+        <div style="display:flex; gap:10px; flex-wrap:wrap; flex: 2;">
+          <div>
+            <label style="margin-top:0;">Filter Discipline</label>
+            <select id="discFilter" style="width: auto; min-width: 150px;">
+              <option value="">All Disciplines</option>
+              <option value="piping">Piping</option>
+              <option value="civil">Civil</option>
+              <option value="electrical">Electrical</option>
+            </select>
+          </div>
+          <div>
+            <label style="margin-top:0;">Filter Status</label>
+            <select id="statusFilter" style="width: auto; min-width: 150px;">
+              <option value="">All Statuses</option>
+              <option value="not_started">Not Started</option>
+              <option value="in_progress">In Progress</option>
+              <option value="completed">Completed</option>
+            </select>
+          </div>
+        </div>
+        <button class="secondary" id="refreshBtn" style="margin-top:0;">Refresh View</button>
+      </div>
+    </div>
+
+    <div id="treeContainer"></div>
+  </main>
+  <script src="app.js"></script>
+  <script>
+    let rawActivities = [];
+
+    (async () => {
+      await renderTopbar('schedule.html');
+      const user = State.user;
+      if (user && (user.role === 'admin' || user.role === 'planner')) {
+        document.getElementById('importCard').style.display = '';
+      }
+      load();
+    })();
+
+    async function load() {
+      try {
+        rawActivities = await api('/schedule');
+        renderTree();
+      } catch (err) {
+        document.getElementById('treeContainer').innerHTML = `<div class="card bad-bg"><b style="color:var(--bad)">Error loading schedule:</b> ${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    function renderTree() {
+      const disc = document.getElementById('discFilter').value;
+      const status = document.getElementById('statusFilter').value;
+      const container = document.getElementById('treeContainer');
+
+      let filtered = rawActivities;
+      if (disc) filtered = filtered.filter(a => a.discipline === disc || a.level < 3);
+      if (status) filtered = filtered.filter(a => a.status === status || a.level < 3);
+
+      if (!filtered.length) {
+        container.innerHTML = '<div class="card muted">No activities found matching criteria.</div>';
+        return;
+      }
+
+      // Build hierarchy map
+      const l1List = filtered.filter(a => a.level === 1 || !a.parent_id);
+      const l3Map = {};
+      filtered.filter(a => a.level === 3).forEach(a => {
+        l3Map[a.id] = { node: a, leaves: [] };
+      });
+
+      // Assign L5/L6 leaves to parent L3 nodes or fallback list
+      const orphanLeaves = [];
+      filtered.filter(a => a.level >= 5).forEach(leaf => {
+        if (leaf.parent_id && l3Map[leaf.parent_id]) {
+          l3Map[leaf.parent_id].leaves.push(leaf);
+        } else {
+          orphanLeaves.push(leaf);
+        }
+      });
+
+      // Calculate totals
+      const totalLeaves = filtered.filter(a => a.level >= 5);
+      const completedCount = totalLeaves.filter(a => a.status === 'completed').length;
+      const pct = totalLeaves.length ? Math.round((completedCount / totalLeaves.length) * 100) : 0;
+
+      let html = '';
+
+      // Project Header Card (L1)
+      const projectNode = l1List[0] || { wbs_code: 'P1', description: 'Project Schedule Baseline' };
+      html += `
+        <div class="wbs-project-card">
+          <div class="wbs-project-header">
+            <div>
+              <span class="pill">${escapeHtml(projectNode.wbs_code)}</span>
+              <span style="margin-left: 8px;">${escapeHtml(projectNode.description)}</span>
+            </div>
+            <div style="font-size:14px; color:var(--muted)">Overall Progress: <b style="color:var(--good); font-size:16px">${pct}%</b> (${completedCount}/${totalLeaves.length})</div>
+          </div>
+          <div class="score-bar" style="height:6px;">
+            <div class="score-fill" style="width:${pct}%; background:var(--good)"></div>
+          </div>
+        </div>
+        <div class="wbs-tree">`;
+
+      // Area Subtrees (L3)
+      Object.values(l3Map).forEach(({ node, leaves }) => {
+        if (disc && node.discipline !== disc && !leaves.length) return;
+
+        const areaDone = leaves.filter(l => l.status === 'completed').length;
+        const areaPct = leaves.length ? Math.round((areaDone / leaves.length) * 100) : 0;
+
+        html += `
+          <div class="wbs-area-card">
+            <div class="wbs-area-header" onclick="toggleArea('${node.id}')">
+              <div>
+                <span class="muted" style="margin-right:8px">▼</span>
+                <b>${escapeHtml(node.wbs_code)}</b> — ${escapeHtml(node.description)}
+                <span class="badge ${node.discipline}">${escapeHtml(node.discipline)}</span>
+              </div>
+              <div class="muted" style="font-size:13px">
+                ${areaDone}/${leaves.length} completed (${areaPct}%)
+              </div>
+            </div>
+            <div id="area-body-${node.id}">
+              <table class="wbs-leaf-table">
+                <thead>
+                  <tr>
+                    <th>WBS</th>
+                    <th>Activity Description</th>
+                    <th>Discipline</th>
+                    <th>Planned Window</th>
+                    <th>Actual Window</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${leaves.map(leaf => `
+                    <tr>
+                      <td style="font-family:monospace; font-weight:600; color:var(--accent)">${escapeHtml(leaf.wbs_code)}</td>
+                      <td><a href="activity.html?id=${leaf.id}" style="color:var(--text); font-weight:500; text-decoration:none;">${escapeHtml(leaf.description)}</a></td>
+                      <td><span class="badge" style="background:rgba(255,255,255,0.05); color:var(--muted); font-size:10px">${escapeHtml(leaf.discipline)}</span></td>
+                      <td class="muted">${leaf.planned_start ? escapeHtml(leaf.planned_start) : '—'} &rarr; ${leaf.planned_end ? escapeHtml(leaf.planned_end) : '—'}</td>
+                      <td class="muted">${leaf.actual_start ? escapeHtml(leaf.actual_start) : '—'} &rarr; ${leaf.actual_end ? escapeHtml(leaf.actual_end) : '—'}</td>
+                      <td><span class="badge ${leaf.status}">${leaf.status ? leaf.status.replace('_',' ') : 'not started'}</span></td>
+                    </tr>
+                  `).join('') || '<tr><td colspan="6" class="muted" style="padding-left:16px">No leaf activities under this area.</td></tr>'}
+                </tbody>
+              </table>
+            </div>
+          </div>`;
+      });
+
+      html += '</div>';
+      container.innerHTML = html;
+    }
+
+    function toggleArea(id) {
+      const body = document.getElementById(`area-body-${id}`);
+      if (body) body.style.display = body.style.display === 'none' ? '' : 'none';
+    }
+
+    document.getElementById('discFilter').onchange = renderTree;
+    document.getElementById('statusFilter').onchange = renderTree;
+    document.getElementById('refreshBtn').onclick = load;
+
+    function downloadMasterTemplate() {
+      const baseUrl = (location.protocol === 'file:' || location.port !== '3000') ? 'http://localhost:3000' : '';
+      window.open(baseUrl + '/api/schedule/template', '_blank');
+    }
+
+    document.getElementById('importBtn').onclick = async () => {
+      const file = document.getElementById('baselineFile').files[0];
+      if (!file) return toast('Choose a baseline spreadsheet (.xlsx / .csv) first');
+      const fd = new FormData();
+      fd.append('file', file);
+      try {
+        const res = await api('/schedule/import', { method: 'POST', body: fd });
+        toast(`Master schedule published: ${res.activities_created || 0} created, ${res.activities_updated || 0} updated across all disciplines!`);
+        load();
+      } catch (e) { toast(e.message); }
+    };
+
+    document.getElementById('seedMasterBtn').onclick = async () => {
+      if (!confirm('Restore default multi-discipline master schedule template across Civil, Piping, and Electrical?')) return;
+      try {
+        const res = await api('/schedule/seed-master', { method: 'POST' });
+        toast(res.message);
+        load();
+      } catch (e) { toast(e.message); }
+    };
+  </script>
+</body>
+</html>

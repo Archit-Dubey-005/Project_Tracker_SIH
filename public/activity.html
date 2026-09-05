@@ -1,0 +1,90 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Activity Detail — Progress Tracker</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar" id="topbar"></header>
+  <main>
+    <div style="margin-bottom:16px;">
+      <a href="schedule.html" class="muted" style="font-size:14px; text-decoration:none; font-weight:500;">&larr; Back to Schedule Baseline</a>
+    </div>
+    <div id="content"></div>
+  </main>
+  <script src="app.js"></script>
+  <script>
+    renderTopbar('schedule.html');
+    const id = new URLSearchParams(location.search).get('id');
+    const el = document.getElementById('content');
+
+    (async () => {
+      if (!id) {
+        el.innerHTML = '<div class="card muted">No activity specified in URL parameter. <a href="schedule.html" style="color:var(--accent)">Return to Schedule</a></div>';
+        return;
+      }
+
+      try {
+        const a = await api(`/schedule/${id}`);
+        el.innerHTML = `
+          <h1>${escapeHtml(a.wbs_code)} — ${escapeHtml(a.description)}</h1>
+          <p class="sub">Discipline: <span class="badge" style="background:rgba(59,130,246,0.1); color:var(--accent)">${escapeHtml(a.discipline)}</span> &bull; Status: <span class="badge ${a.status}">${escapeHtml(a.status ? a.status.replace('_',' ') : 'not started')}</span></p>
+
+          <div class="card">
+            <b style="font-size:15px; display:block; margin-bottom:12px">Baseline Schedule Timeline</b>
+            <div class="row">
+              <div style="background:#0b1120; padding:12px; border-radius:8px; border:1px solid var(--border)">
+                <label style="margin-top:0">Planned Schedule Window</label>
+                <div style="font-size:15px; font-weight:600">${escapeHtml(a.planned_start || 'Not set')} &rarr; ${escapeHtml(a.planned_end || 'Not set')}</div>
+              </div>
+              <div style="background:#0b1120; padding:12px; border-radius:8px; border:1px solid var(--border)">
+                <label style="margin-top:0">Actual Schedule Window</label>
+                <div style="font-size:15px; font-weight:600; color:var(--good)">${escapeHtml(a.actual_start || 'Not started')} &rarr; ${escapeHtml(a.actual_end || 'In progress')}</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <b style="font-size:15px; display:block; margin-bottom:12px">Linked Field Report Events</b>
+            ${a.linked_events.length ? a.linked_events.map(e => `
+              <div class="result-item">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                  <div>
+                    <b style="font-size:14px">${escapeHtml(e.activity_description)}</b>
+                    <span class="badge ${e.status}">${escapeHtml(e.status)}</span>
+                    <span class="badge" style="background:rgba(255,255,255,0.06); color:var(--muted); font-size:10px">${escapeHtml(e.event_type)}</span>
+                  </div>
+                  <span class="pill">${Math.round((e.similarity_score||0)*100)}% match</span>
+                </div>
+                <div class="muted" style="font-size:12px; margin-top:6px">
+                  Extracted Date: <b>${escapeHtml(e.extracted_date)}</b> &bull; Source: ${escapeHtml(e.source_type)} &bull; Submitted by: <b>${escapeHtml(e.submitted_by_name || 'Unknown')}</b> &bull; Logged: ${escapeHtml(e.created_at)}
+                </div>
+              </div>`).join('')
+              : '<div class="muted" style="padding:12px 0;">No field actual events confirmed or linked to this baseline activity yet.</div>'}
+          </div>
+
+          <div class="card">
+            <b style="font-size:15px; display:block; margin-bottom:12px">Activity Audit History</b>
+            <table>
+              <thead>
+                <tr><th>Action</th><th>Details</th><th>Timestamp</th></tr>
+              </thead>
+              <tbody>
+                ${a.audit_trail.map(l => `
+                  <tr>
+                    <td><span class="badge ${l.action==='confirmed'?'confirmed':l.action==='rejected'?'rejected':'pending'}">${escapeHtml(l.action)}</span></td>
+                    <td class="muted">${escapeHtml(l.details || '')}</td>
+                    <td class="muted" style="font-size:12px">${escapeHtml(l.created_at)}</td>
+                  </tr>
+                `).join('') || '<tr><td colspan="3" class="muted">No audit history entries found for this activity.</td></tr>'}
+              </tbody>
+            </table>
+          </div>`;
+      } catch (err) {
+        el.innerHTML = `<div class="card" style="border-color:var(--bad); background:var(--bad-bg)"><b style="color:var(--bad)">Error fetching activity:</b> ${escapeHtml(err.message)}</div>`;
+      }
+    })();
+  </script>
+</body>
+</html>

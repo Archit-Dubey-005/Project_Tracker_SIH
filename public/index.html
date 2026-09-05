@@ -1,0 +1,115 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Progress Tracker — Authentic Credentials Login</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar" id="topbar"></header>
+  <main>
+    <div style="text-align:center; padding: 10px 0 20px;">
+      <h1 style="font-size:30px; font-weight:800; background: linear-gradient(135deg, #f1f5f9 0%, #94a3b8 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Intelligent Field Progress &amp; Schedule-Linking Engine</h1>
+      <p class="sub" style="font-size:15px; max-width:620px; margin: 6px auto 0;">Infrastructure progress tracking: link site execution reports to baseline schedules with verified MySQL email &amp; password database authentication.</p>
+    </div>
+
+    <!-- Authenticated Active Session Panel -->
+    <div id="loggedInCard" class="card" style="display:none; background: linear-gradient(180deg, #131d2e 0%, #111827 100%); border-color: rgba(59,130,246,0.3); text-align:center; padding: 24px;">
+      <span class="badge confirmed" style="font-size:12px; padding: 4px 12px; margin-bottom:12px;">Active Session Authenticated</span>
+      <h2 style="font-size:22px; margin: 8px 0 4px 0;" id="welcomeUser"></h2>
+      <p class="muted" style="margin-bottom: 20px;" id="welcomeRole"></p>
+
+      <div class="row" style="max-width: 600px; margin: 0 auto; gap: 12px;" id="actionButtons"></div>
+    </div>
+
+    <!-- Authentic Credentials Login Form -->
+    <div id="loginCard" class="card" style="max-width: 480px; margin: 0 auto; padding: 26px;">
+      <b style="font-size:20px; display:block; margin-bottom:4px; text-align:center;">Account Login</b>
+      <p class="sub" style="text-align:center; margin-bottom:20px; font-size:13px;">Enter your registered Email, Password, and Role to verify:</p>
+
+      <div id="loginError" class="card bad-bg" style="display:none; padding:12px; margin-bottom:18px; font-size:13px; color:var(--bad)"></div>
+
+      <form id="loginForm" onsubmit="handleLogin(event)">
+        <label for="loginEmail">Email Address</label>
+        <input type="email" id="loginEmail" placeholder="e.g. civil@project.com" required style="margin-bottom: 12px;" />
+
+        <label for="loginPassword">Password</label>
+        <input type="password" id="loginPassword" placeholder="Enter your password" required style="margin-bottom: 12px;" />
+
+        <label for="loginRole">Assigned Role / Discipline</label>
+        <select id="loginRole" style="margin-bottom: 20px;">
+          <option value="civil">Civil Supervisor (civil)</option>
+          <option value="piping">Piping Supervisor (piping)</option>
+          <option value="electrical">Electrical Supervisor (electrical)</option>
+          <option value="planner">Project Planner (planner)</option>
+          <option value="admin">Administrator (admin)</option>
+        </select>
+
+        <button type="submit" style="width:100%">Verify Credentials &amp; Log In &rarr;</button>
+      </form>
+    </div>
+  </main>
+  <script src="app.js"></script>
+  <script>
+    (async () => {
+      await renderTopbar('index.html');
+      checkSession();
+    })();
+
+    function checkSession() {
+      const user = State.user;
+      const loggedInCard = document.getElementById('loggedInCard');
+      const loginCard = document.getElementById('loginCard');
+
+      if (user) {
+        loggedInCard.style.display = '';
+        loginCard.style.display = 'none';
+
+        document.getElementById('welcomeUser').textContent = `Welcome back, ${user.name}!`;
+        document.getElementById('welcomeRole').textContent = `Authenticated as ${user.role.toUpperCase()}${user.discipline ? ' (' + user.discipline.toUpperCase() + ')' : ''} — ${user.email || ''}`;
+
+        const actions = [];
+        if (['supervisor', 'planner', 'admin'].includes(user.role)) {
+          actions.push('<a href="log.html" style="flex:1; text-decoration:none;"><button style="width:100%">Log Progress</button></a>');
+          actions.push('<a href="approval.html" style="flex:1; text-decoration:none;"><button class="secondary" style="width:100%">Task Approval</button></a>');
+        }
+        actions.push('<a href="schedule.html" style="flex:1; text-decoration:none;"><button class="secondary" style="width:100%">Schedule Baseline</button></a>');
+        if (['supervisor', 'planner', 'admin'].includes(user.role)) {
+          actions.push('<a href="dashboard.html" style="flex:1; text-decoration:none;"><button class="secondary" style="width:100%">Dashboard</button></a>');
+        }
+
+        document.getElementById('actionButtons').innerHTML = actions.join('');
+      } else {
+        loggedInCard.style.display = 'none';
+        loginCard.style.display = '';
+      }
+    }
+
+    async function handleLogin(e) {
+      e.preventDefault();
+      const email = document.getElementById('loginEmail').value.trim();
+      const password = document.getElementById('loginPassword').value.trim();
+      const role = document.getElementById('loginRole').value;
+      const errBox = document.getElementById('loginError');
+      errBox.style.display = 'none';
+
+      try {
+        const res = await api('/auth/login', {
+          method: 'POST',
+          body: JSON.stringify({ email, password, role })
+        });
+
+        if (res.user) {
+          State.user = res.user;
+          toast(`Successfully logged in as ${res.user.name}`);
+          renderTopbar('index.html');
+          checkSession();
+        }
+      } catch (err) {
+        errBox.innerHTML = escapeHtml(err.message || 'Invalid email, password, or role.');
+        errBox.style.display = '';
+      }
+    }
+  </script>
+</body>
+</html>

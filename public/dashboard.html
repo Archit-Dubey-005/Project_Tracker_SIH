@@ -1,0 +1,140 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Dashboard — Progress Tracker</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar" id="topbar"></header>
+  <main>
+    <h1>Project Progress Dashboard</h1>
+    <p class="sub">High-level schedule rollup, review queue backlog, discipline progress, and recent audit activity.</p>
+    <div id="content"></div>
+  </main>
+  <script src="app.js"></script>
+  <script>
+    (async () => {
+      await renderTopbar('dashboard.html');
+      const el = document.getElementById('content');
+      const user = State.user;
+
+      try {
+        const d = await api('/dashboard');
+
+        const backlogMap = Object.fromEntries(d.review_backlog.map(r => [r.status, r.count]));
+
+        el.innerHTML = `
+          <div class="grid-3">
+            <div class="card stat">
+              <div class="num" style="color:var(--warn)">${backlogMap.pending || 0}</div>
+              <div class="label">Pending Review</div>
+            </div>
+            <div class="card stat">
+              <div class="num" style="color:var(--good)">${backlogMap.confirmed || 0}</div>
+              <div class="label">Confirmed Matches</div>
+            </div>
+            <div class="card stat">
+              <div class="num" style="color:var(--bad)">${d.overdue_activities.length}</div>
+              <div class="label">Overdue Activities</div>
+            </div>
+          </div>
+
+          <div class="card">
+            <b style="font-size:16px; display:block; margin-bottom:12px">Execution Progress by Discipline</b>
+            <table>
+              <thead>
+                <tr>
+                  <th>Discipline</th>
+                  <th>Total L5/L6 Activities</th>
+                  <th>Completed</th>
+                  <th>In Progress</th>
+                  <th>Not Started</th>
+                  <th>Completion Rate</th>
+                  <th>Work Logging Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${d.by_discipline.map(r => {
+                  const pct = r.total ? Math.round((r.completed / r.total) * 100) : 0;
+                  const isSupervisor = user && user.role === 'supervisor';
+                  const isUserDiscipline = user && user.discipline && user.discipline.toLowerCase() === r.discipline.toLowerCase();
+                  const canUpload = !isSupervisor || isUserDiscipline;
+
+                  const actionBtn = canUpload
+                    ? `<a href="log.html" style="text-decoration:none;"><button style="padding:4px 10px; font-size:11px; height:28px;">Log Progress &rarr;</button></a>`
+                    : `<button class="secondary" disabled style="padding:4px 10px; font-size:11px; height:28px; opacity:0.4; cursor:not-allowed;" title="Restricted to ${escapeHtml(r.discipline)} Supervisor">🔒 Restricted (${escapeHtml(r.discipline)})</button>`;
+
+                  return `
+                    <tr>
+                      <td><span class="badge" style="background:rgba(59,130,246,0.1); color:var(--accent); font-weight:600">${escapeHtml(r.discipline)}</span></td>
+                      <td><b>${r.total}</b></td>
+                      <td><span style="color:var(--good); font-weight:600">${r.completed}</span></td>
+                      <td><span style="color:var(--warn); font-weight:600">${r.in_progress}</span></td>
+                      <td><span class="muted">${r.not_started}</span></td>
+                      <td style="min-width: 140px;">
+                        <div style="display:flex; align-items:center; gap:8px;">
+                          <div class="score-bar" style="flex:1;">
+                            <div class="score-fill" style="width:${pct}%; background:var(--good)"></div>
+                          </div>
+                          <span style="font-size:12px; font-weight:700;">${pct}%</span>
+                        </div>
+                      </td>
+                      <td>${actionBtn}</td>
+                    </tr>`;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>
+
+          <div class="card">
+            <b style="font-size:16px; display:block; margin-bottom:12px">Overdue Activities (Planned End Passed)</b>
+            ${d.overdue_activities.length ? `
+              <table>
+                <thead>
+                  <tr><th>WBS Code</th><th>Description</th><th>Discipline</th><th>Planned End</th></tr>
+                </thead>
+                <tbody>
+                  ${d.overdue_activities.map(a => `
+                    <tr>
+                      <td style="font-family:monospace; font-weight:600; color:var(--bad)">${escapeHtml(a.wbs_code)}</td>
+                      <td>${escapeHtml(a.description)}</td>
+                      <td><span class="badge" style="background:rgba(255,255,255,0.05); color:var(--muted); font-size:10px">${escapeHtml(a.discipline)}</span></td>
+                      <td style="color:var(--bad); font-weight:500">${escapeHtml(a.planned_end)}</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>`
+              : '<div class="muted" style="padding:12px 0;">No overdue activities. Schedule is currently on track.</div>'}
+          </div>
+
+          <div class="card">
+            <b style="font-size:16px; display:block; margin-bottom:12px">Recent Activity Audit Trail</b>
+            <table>
+              <thead>
+                <tr><th>Action</th><th>Details</th><th>Actor</th><th>Timestamp</th></tr>
+              </thead>
+              <tbody>
+                ${d.recent_activity.map(l => `
+                  <tr>
+                    <td><span class="badge ${l.action === 'confirmed' ? 'confirmed' : l.action === 'rejected' ? 'rejected' : 'pending'}">${escapeHtml(l.action)}</span></td>
+                    <td>${escapeHtml(l.details || '')}</td>
+                    <td class="muted">${escapeHtml(l.actor_name || 'System')}</td>
+                    <td class="muted" style="font-size:12px">${escapeHtml(l.created_at)}</td>
+                  </tr>
+                `).join('') || '<tr><td colspan="4" class="muted">No recent activity logged.</td></tr>'}
+              </tbody>
+            </table>
+          </div>`;
+      } catch (err) {
+        el.innerHTML = `
+          <div class="card" style="border-color:var(--bad); background:var(--bad-bg)">
+            <b style="color:var(--bad); font-size:16px">Access Restricted or Error</b>
+            <p style="margin-top:6px" class="muted">${escapeHtml(err.message)}</p>
+            <p style="font-size:13px">Sign in as a <b>Supervisor</b>, <b>Planner</b>, or <b>Admin</b> to view the dashboard.</p>
+          </div>`;
+      }
+    })();
+  </script>
+</body>
+</html>
