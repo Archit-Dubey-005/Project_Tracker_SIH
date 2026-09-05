@@ -19,10 +19,15 @@ if (connectionUrl) {
     uri: connectionUrl,
     waitForConnections: true,
     connectionLimit: 10,
+    connectTimeout: 5000,
     queueLimit: 0,
     ssl: process.env.DB_SSL === 'false' ? false : { rejectUnauthorized: false },
   });
 } else {
+  if (process.env.VERCEL) {
+    console.error('\n[CRITICAL ERROR] Running on Vercel but DATABASE_URL is not set in Environment Variables!');
+    console.error('Please add DATABASE_URL in Vercel Dashboard -> Settings -> Environment Variables.\n');
+  }
   console.log(`[MySQL Config] Connecting to ${user}@${host}:${port}/${database} (Password set: ${password ? 'YES' : 'NO'})`);
   pool = mysql.createPool({
     host,
@@ -30,6 +35,7 @@ if (connectionUrl) {
     password,
     database,
     port,
+    connectTimeout: 5000,
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0,

@@ -36,9 +36,17 @@ async function api(path, opts = {}) {
   if (user && user.id) headers['x-user-id'] = user.id;
 
   const baseUrl = getApiBaseUrl();
-  const res = await fetch(baseUrl + '/api' + path, { ...opts, headers });
+  const url = baseUrl + '/api' + path;
+  let res;
+  try {
+    res = await fetch(url, { ...opts, headers });
+  } catch (netErr) {
+    console.error(`[API Network Error] URL: ${url}`, netErr);
+    throw new Error(`Failed to fetch (${url}): ${netErr.message || 'Network connection failed'}. Please ensure Vercel backend function is running and check browser console (F12).`);
+  }
+
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: res.statusText }));
+    const err = await res.json().catch(() => ({ error: res.statusText || `Request failed with status ${res.status}` }));
     throw new Error(err.error || `Request failed with status ${res.status}`);
   }
   return res.status === 204 ? null : res.json();

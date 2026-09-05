@@ -11,18 +11,26 @@ app.use(express.json({ limit: '100mb' }));
 app.use(express.urlencoded({ limit: '100mb', extended: true }));
 app.use(express.static(path.join(__dirname, '../public')));
 
-app.use('/api/auth', require('./routes/auth'));
-app.use('/api/log', require('./routes/log'));
-app.use('/api/ingest', require('./routes/ingest'));
-app.use('/api/review', require('./routes/review'));
-app.use('/api/schedule', require('./routes/schedule'));
-app.use('/api/dashboard', require('./routes/dashboard'));
+const authRoute = require('./routes/auth');
+const logRoute = require('./routes/log');
+const ingestRoute = require('./routes/ingest');
+const reviewRoute = require('./routes/review');
+const scheduleRoute = require('./routes/schedule');
+const dashboardRoute = require('./routes/dashboard');
 
-app.get('/health', (req, res) => res.json({ ok: true }));
+// Support both /api/* and direct routes for maximum Vercel rewrite compatibility
+app.use(['/api/auth', '/auth'], authRoute);
+app.use(['/api/log', '/log'], logRoute);
+app.use(['/api/ingest', '/ingest'], ingestRoute);
+app.use(['/api/review', '/review'], reviewRoute);
+app.use(['/api/schedule', '/schedule'], scheduleRoute);
+app.use(['/api/dashboard', '/dashboard'], dashboardRoute);
+
+app.get(['/health', '/api/health'], (req, res) => res.json({ ok: true, timestamp: new Date().toISOString() }));
 
 // Centralized error handler
 app.use((err, req, res, next) => {
-  console.error(err);
+  console.error('[App Error]', err);
   res.status(500).json({ error: err.message || 'Internal server error' });
 });
 
