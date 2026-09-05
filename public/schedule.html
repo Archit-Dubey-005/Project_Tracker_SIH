@@ -199,7 +199,7 @@
     document.getElementById('refreshBtn').onclick = load;
 
     function downloadMasterTemplate() {
-      const baseUrl = (location.protocol === 'file:' || location.port !== '3000') ? 'http://localhost:3000' : '';
+      const baseUrl = typeof getApiBaseUrl === 'function' ? getApiBaseUrl() : '';
       window.open(baseUrl + '/api/schedule/template', '_blank');
     }
 

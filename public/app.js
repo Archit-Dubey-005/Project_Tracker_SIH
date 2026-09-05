@@ -19,6 +19,15 @@ function escapeHtml(str) {
     .replace(/'/g, '&#039;');
 }
 
+function getApiBaseUrl() {
+  if (location.protocol === 'file:') return 'http://localhost:3000';
+  const isLocal = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+  if (isLocal && location.port && location.port !== '3000') {
+    return `http://${location.hostname}:3000`;
+  }
+  return '';
+}
+
 async function api(path, opts = {}) {
   const user = State.user;
   const isFormData = opts.body instanceof FormData;
@@ -26,7 +35,7 @@ async function api(path, opts = {}) {
   if (opts.headers) Object.assign(headers, opts.headers);
   if (user && user.id) headers['x-user-id'] = user.id;
 
-  const baseUrl = (location.protocol === 'file:' || location.port !== '3000') ? 'http://localhost:3000' : '';
+  const baseUrl = getApiBaseUrl();
   const res = await fetch(baseUrl + '/api' + path, { ...opts, headers });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
