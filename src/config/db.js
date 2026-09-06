@@ -14,12 +14,16 @@ const port = Number(process.env.DB_PORT) || 3306;
 let pool;
 
 if (connectionUrl) {
+  if (connectionUrl.includes('mysql.railway.internal')) {
+    console.error('\n[CRITICAL CONFIG WARNING] DATABASE_URL is set to Railway internal domain (mysql.railway.internal)!');
+    console.error('This internal domain only works within Railway. From Vercel, you must use Railway\'s Public TCP Proxy URL (e.g. *.proxy.rlwy.net).\n');
+  }
   console.log(`[MySQL Config] Connecting using DATABASE_URL`);
   pool = mysql.createPool({
     uri: connectionUrl,
     waitForConnections: true,
     connectionLimit: 10,
-    connectTimeout: 5000,
+    connectTimeout: 20000,
     queueLimit: 0,
     ssl: process.env.DB_SSL === 'false' ? false : { rejectUnauthorized: false },
   });
@@ -35,7 +39,7 @@ if (connectionUrl) {
     password,
     database,
     port,
-    connectTimeout: 5000,
+    connectTimeout: 20000,
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0,
@@ -139,10 +143,12 @@ function getPool() {
 
     try { await conn.query(`ALTER TABLE matches ADD COLUMN similarity_score DOUBLE DEFAULT 0.0`); } catch (_) {}
 
-    // Ensure uniform collation across all tables to prevent JOIN collation mismatch
-    const tables = ['users', 'activities', 'raw_entries', 'extracted_events', 'matches', 'audit_log'];
-    for (const t of tables) {
-      try { await conn.query(`ALTER TABLE \`${t}\` CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`); } catch (_) {}
+    // Only convert collations if NOT on Vercel to prevent blocking table locks on serverless cold starts
+    if (!process.env.VERCEL) {
+      const tables = ['users', 'activities', 'raw_entries', 'extracted_events', 'matches', 'audit_log'];
+      for (const t of tables) {
+        try { await conn.query(`ALTER TABLE \`${t}\` CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`); } catch (_) {}
+      }
     }
 
     await conn.query('SET FOREIGN_KEY_CHECKS = 1');
@@ -160,5 +166,78 @@ function getPool() {
   }
 })();
 
+async function checkDbStatus() {
+  const isVercel = !!process.env.VERCEL;
+  const currentUrl = process.env.DATABASE_URL || process.env.MYSQL_URL;
+
+  if (!currentUrl && isVercel) {
+    return {
+      ok: false,
+      error: "DATABASE_URL environment variable is missing in Vercel. Please add DATABASE_URL in Vercel Dashboard -> Settings -> Environment Variables.",
+      environment: 'vercel',
+      connected: false
+    };
+  }
+
+  if (currentUrl && currentUrl.includes('mysql.railway.internal')) {
+    return {
+      ok: false,
+      error: "DATABASE_URL is set to Railway's internal domain (mysql.railway.internal). This domain only works inside Railway. Please use Railway's Public TCP Proxy URL (e.g. *.proxy.rlwy.net).",
+      environment: isVercel ? 'vercel' : 'local',
+      connected: false
+    };
+  }
+
+  try {
+    const conn = await pool.getConnection();
+    try {
+      await conn.query('SELECT 1 as test');
+      const [userRows] = await conn.query('SELECT COUNT(*) as count FROM users');
+      const userCount = userRows[0]?.count ?? 0;
+
+      let hostInfo = host;
+      let dbName = database;
+      if (currentUrl) {
+        try {
+          const parsed = new URL(currentUrl);
+          hostInfo = parsed.host;
+          dbName = parsed.pathname.replace(/^\//, '') || 'default';
+        } catch (_) {}
+      }
+
+      return {
+        ok: true,
+        database: 'connected',
+        host: hostInfo,
+        databaseName: dbName,
+        userCount,
+        environment: isVercel ? 'vercel' : 'local',
+        timestamp: new Date().toISOString()
+      };
+    } finally {
+      conn.release();
+    }
+  } catch (err) {
+    let hint = 'Check database connection and configuration.';
+    if (err.code === 'ER_NO_SUCH_TABLE') {
+      hint = "The database exists, but the 'users' table is missing. Check if DATABASE_URL points to the correct database (e.g. /progress_tracker or /railway) where users were seeded.";
+    } else if (err.code === 'ECONNREFUSED') {
+      hint = "Connection refused. Ensure DATABASE_URL is set in Vercel Environment Variables.";
+    } else if (err.code === 'ETIMEDOUT') {
+      hint = "Connection timed out. Check Railway MySQL proxy availability.";
+    }
+
+    return {
+      ok: false,
+      error: err.message,
+      code: err.code,
+      hint,
+      environment: isVercel ? 'vercel' : 'local',
+      connected: false
+    };
+  }
+}
+
 pool.getPool = getPool;
+pool.checkDbStatus = checkDbStatus;
 module.exports = pool;

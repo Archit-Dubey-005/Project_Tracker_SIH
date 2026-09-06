@@ -45,8 +45,9 @@ async function login(req, res, next) {
       }
     }
 
-    // Success: return authenticated user record
-    res.json({ ok: true, user });
+    // Success: return authenticated user record without exposing password
+    const { password: _pwd, ...safeUser } = user;
+    res.json({ ok: true, user: safeUser });
   } catch (err) {
     next(err);
   }
