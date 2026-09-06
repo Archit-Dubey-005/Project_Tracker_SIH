@@ -3,7 +3,8 @@ require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
 
 const mysql = require('mysql2/promise');
 
-const connectionUrl = process.env.DATABASE_URL || process.env.MYSQL_URL;
+const rawUrl = process.env.DATABASE_URL || process.env.MYSQL_URL;
+const connectionUrl = rawUrl ? rawUrl.trim().replace(/^["']|["']$/g, '') : null;
 
 const host = process.env.DB_HOST || 'localhost';
 const user = process.env.DB_USER || 'root';
@@ -168,12 +169,14 @@ function getPool() {
 
 async function checkDbStatus() {
   const isVercel = !!process.env.VERCEL;
-  const currentUrl = process.env.DATABASE_URL || process.env.MYSQL_URL;
+  const rawUrl = process.env.DATABASE_URL || process.env.MYSQL_URL;
+  const currentUrl = rawUrl ? rawUrl.trim().replace(/^["']|["']$/g, '') : null;
+  const hasCustomHost = process.env.DB_HOST && process.env.DB_HOST !== 'localhost' && process.env.DB_HOST !== '127.0.0.1';
 
-  if (!currentUrl && isVercel) {
+  if (!currentUrl && !hasCustomHost && isVercel) {
     return {
       ok: false,
-      error: "DATABASE_URL environment variable is missing in Vercel. Please add DATABASE_URL in Vercel Dashboard -> Settings -> Environment Variables.",
+      error: "DATABASE_URL environment variable is missing in Vercel. Please add DATABASE_URL in Vercel Dashboard -> Settings -> Environment Variables, ensure the 'Production' box is checked, and then redeploy.",
       environment: 'vercel',
       connected: false
     };
