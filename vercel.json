@@ -3,12 +3,8 @@
   "cleanUrls": true,
   "rewrites": [
     {
-      "source": "/api/(.*)",
-      "destination": "/api"
-    },
-    {
       "source": "/health",
-      "destination": "/api"
+      "destination": "/api/health"
     },
     {
       "source": "/",
