@@ -1,4 +1,4 @@
-const { v4: uuid } = require('uuid');
+const { randomUUID: uuid } = require('crypto');
 const XLSX = require('xlsx');
 const db = require('../config/db');
 const { extractFromRow } = require('../services/extractionService');
