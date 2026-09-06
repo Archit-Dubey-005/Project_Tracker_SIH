@@ -3,14 +3,22 @@ require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
 
 const mysql = require('mysql2/promise');
 
-const rawUrl = process.env.DATABASE_URL || process.env.MYSQL_URL;
+const rawUrl = process.env.DATABASE_URL ||
+               process.env.MYSQL_URL ||
+               process.env.MYSQL_PUBLIC_URL ||
+               process.env.DATABASE_PUBLIC_URL ||
+               process.env.DB_URL ||
+               process.env.MYSQLDATABASEURL;
+
 const connectionUrl = rawUrl ? rawUrl.trim().replace(/^["']|["']$/g, '') : null;
 
-const host = process.env.DB_HOST || 'localhost';
-const user = process.env.DB_USER || 'root';
-const password = process.env.DB_PASSWORD !== undefined ? String(process.env.DB_PASSWORD) : '';
-const database = process.env.DB_NAME || 'progress_tracker';
-const port = Number(process.env.DB_PORT) || 3306;
+const host = process.env.DB_HOST || process.env.MYSQLHOST || 'localhost';
+const user = process.env.DB_USER || process.env.MYSQLUSER || 'root';
+const password = process.env.DB_PASSWORD !== undefined
+  ? String(process.env.DB_PASSWORD)
+  : (process.env.MYSQLPASSWORD !== undefined ? String(process.env.MYSQLPASSWORD) : '');
+const database = process.env.DB_NAME || process.env.MYSQLDATABASE || 'progress_tracker';
+const port = Number(process.env.DB_PORT || process.env.MYSQLPORT) || 3306;
 
 let pool;
 
@@ -169,14 +177,22 @@ function getPool() {
 
 async function checkDbStatus() {
   const isVercel = !!process.env.VERCEL;
-  const rawUrl = process.env.DATABASE_URL || process.env.MYSQL_URL;
+  const detectedDbEnvKeys = Object.keys(process.env).filter(k => /mysql|db|url|database|railway/i.test(k));
+  const rawUrl = process.env.DATABASE_URL ||
+                 process.env.MYSQL_URL ||
+                 process.env.MYSQL_PUBLIC_URL ||
+                 process.env.DATABASE_PUBLIC_URL ||
+                 process.env.DB_URL ||
+                 process.env.MYSQLDATABASEURL;
   const currentUrl = rawUrl ? rawUrl.trim().replace(/^["']|["']$/g, '') : null;
-  const hasCustomHost = process.env.DB_HOST && process.env.DB_HOST !== 'localhost' && process.env.DB_HOST !== '127.0.0.1';
+  const hasCustomHost = (process.env.DB_HOST && process.env.DB_HOST !== 'localhost' && process.env.DB_HOST !== '127.0.0.1') ||
+                        (process.env.MYSQLHOST && process.env.MYSQLHOST !== 'localhost' && process.env.MYSQLHOST !== '127.0.0.1');
 
   if (!currentUrl && !hasCustomHost && isVercel) {
     return {
       ok: false,
-      error: "DATABASE_URL environment variable is missing in Vercel. Please add DATABASE_URL in Vercel Dashboard -> Settings -> Environment Variables, ensure the 'Production' box is checked, and then redeploy.",
+      error: "No database connection string or host was found in Vercel environment variables. Please add DATABASE_URL in Vercel Dashboard -> Settings -> Environment Variables, ensure the 'Production' box is checked, and then redeploy.",
+      detectedDbEnvKeys,
       environment: 'vercel',
       connected: false
     };
