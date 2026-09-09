@@ -107,12 +107,20 @@
 
     <!-- TAB 1: Project Tasks Status by Project ID -->
     <div id="tabTasks" class="tab-content">
-      <!-- Project ID Search Bar -->
+      <!-- Project ID Search & Discipline Filter Bar -->
       <div class="card card-highlight" style="border-left: 4px solid var(--accent);">
-        <label style="margin-top:0; font-size:13px; color:var(--text);">Write down Project ID to inspect all task statuses:</label>
-        <div style="display:flex; gap:10px; margin-top:8px; flex-wrap:wrap;">
-          <input type="text" id="projectSearchInput" placeholder="Enter Project ID (e.g. P1, P2)" value="P1" style="flex:2; min-width:220px; font-weight:700; text-transform:uppercase; font-size:15px;" onkeydown="if(event.key==='Enter') loadProjectTasks()" />
-          <button type="button" onclick="loadProjectTasks()" style="margin:0; padding:10px 22px;">🔍 View Tasks Status</button>
+        <label style="margin-top:0; font-size:13px; color:var(--text);">Select Project ID &amp; Discipline to inspect schedule status:</label>
+        <div style="display:flex; gap:10px; margin-top:8px; flex-wrap:wrap; align-items:center;">
+          <input type="text" id="projectSearchInput" placeholder="Enter Project ID (e.g. P1, P2)" value="P1" style="flex:2; min-width:200px; font-weight:700; text-transform:uppercase; font-size:15px;" onkeydown="if(event.key==='Enter') loadProjectTasks()" />
+          <select id="topDisciplineFilter" onchange="syncDisciplineFilter()" style="flex:1; min-width:170px; font-size:14px; padding:10px 12px; font-weight:600;">
+            <option value="">All Disciplines</option>
+            <option value="civil">Civil Discipline</option>
+            <option value="piping">Piping Discipline</option>
+            <option value="electrical">Electrical Discipline</option>
+            <option value="mechanical">Mechanical Discipline</option>
+            <option value="general">General Discipline</option>
+          </select>
+          <button type="button" onclick="loadProjectTasks()" style="margin:0; padding:10px 22px;">🔍 Inspect Project</button>
           <button type="button" class="secondary" onclick="loadKnownProjects()" style="margin:0; padding:10px 14px;" title="Refresh list of known projects">🔄 Refresh</button>
         </div>
 
@@ -127,7 +135,7 @@
 
       <!-- Live Project Overview Stats Container -->
       <div id="projectStatsContainer" style="display:none; margin-bottom:20px;">
-        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:12px; margin-bottom:14px;">
+        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:12px; margin-bottom:16px;">
           <div class="stat-kpi">
             <div class="val" style="color:var(--text);" id="statTotal">0</div>
             <div class="lbl">Total Activities</div>
@@ -150,20 +158,32 @@
           </div>
         </div>
 
-        <!-- Overall Progress Bar Card -->
-        <div class="card" style="padding:14px 18px; margin-bottom:16px;">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+        <!-- Dual Chart Layout Panel (Left: Bar Graph, Right: 3-Color Pie Chart) -->
+        <div class="chart-panel-card card-highlight">
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:16px;">
             <div>
-              <b id="projectTitleHeader" style="font-size:16px;">Project P1 Execution Progress</b>
+              <b id="projectTitleHeader" style="font-size:17px; background:var(--hero-gradient); -webkit-background-clip:text; -webkit-text-fill-color:transparent;">Project Execution Analytics</b>
               <span id="supervisorsBadge" class="badge" style="background:rgba(59,130,246,0.15); color:var(--accent); margin-left:8px;">0 Supervisors Assigned</span>
             </div>
             <div>
-              <span class="muted" style="font-size:13px;">Completion: </span>
-              <b style="color:var(--good); font-size:16px;" id="progressPctText">0%</b>
+              <span class="muted" style="font-size:13px;">Filtered Completion: </span>
+              <b style="color:var(--good); font-size:18px;" id="progressPctText">0%</b>
             </div>
           </div>
-          <div class="score-bar" style="height:8px;">
-            <div class="score-fill" id="progressPctFill" style="width:0%; background:var(--good);"></div>
+
+          <div class="chart-grid">
+            <!-- Left Side: Task Comparison Bar Graph (Expected vs Actual Days) -->
+            <div class="chart-left-side" id="adminBarGraphContainer">
+              <!-- Dynamically populated by renderProjectView() -->
+            </div>
+
+            <!-- Right Side: 3-Color Donut / Pie Chart -->
+            <div class="chart-right-side">
+              <b style="font-size:14px; display:block; margin-bottom:14px; text-align:center; color:var(--text);">Project Execution Pie Chart</b>
+              <div id="adminPieChartContainer" style="width:100%;">
+                <!-- Dynamically populated by renderProjectView() -->
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -182,11 +202,13 @@
               <option value="in_progress">In Progress</option>
               <option value="not_started">Not Started</option>
             </select>
-            <select id="taskDisciplineFilter" onchange="renderTasksTable()" style="width:auto; padding:6px 10px; font-size:13px;">
+            <select id="taskDisciplineFilter" onchange="onTableDisciplineChange()" style="width:auto; padding:6px 10px; font-size:13px;">
               <option value="">All Disciplines</option>
               <option value="civil">Civil</option>
               <option value="piping">Piping</option>
               <option value="electrical">Electrical</option>
+              <option value="mechanical">Mechanical</option>
+              <option value="general">General</option>
             </select>
           </div>
         </div>
@@ -454,6 +476,24 @@
       }
     }
 
+    function syncDisciplineFilter() {
+      const topVal = (document.getElementById('topDisciplineFilter').value || '').toLowerCase();
+      const bottomSelect = document.getElementById('taskDisciplineFilter');
+      if (bottomSelect && bottomSelect.value.toLowerCase() !== topVal) {
+        bottomSelect.value = topVal;
+      }
+      renderProjectView();
+    }
+
+    function onTableDisciplineChange() {
+      const bottomVal = (document.getElementById('taskDisciplineFilter').value || '').toLowerCase();
+      const topSelect = document.getElementById('topDisciplineFilter');
+      if (topSelect && topSelect.value.toLowerCase() !== bottomVal) {
+        topSelect.value = bottomVal;
+      }
+      renderProjectView();
+    }
+
     function renderProjectView() {
       const data = currentProjectData;
       const statsBox = document.getElementById('projectStatsContainer');
@@ -472,17 +512,49 @@
       statsBox.style.display = '';
       tableCard.style.display = '';
 
-      const s = data.summary;
-      document.getElementById('statTotal').textContent = s.total_tasks;
-      document.getElementById('statCompleted').textContent = s.completed;
-      document.getElementById('statInProgress').textContent = s.in_progress;
-      document.getElementById('statNotStarted').textContent = s.not_started;
-      document.getElementById('statPending').textContent = s.pending_approvals;
+      const discFilter = (document.getElementById('topDisciplineFilter').value || document.getElementById('taskDisciplineFilter').value || '').trim().toLowerCase();
 
-      document.getElementById('projectTitleHeader').textContent = `Project ${data.project_id} Execution Baseline & Status`;
-      document.getElementById('supervisorsBadge').textContent = `${s.assigned_supervisors_count || 0} Supervisors Assigned`;
-      document.getElementById('progressPctText').textContent = `${s.progress_pct}% (${s.completed}/${s.executable_tasks} leaf tasks)`;
-      document.getElementById('progressPctFill').style.width = `${s.progress_pct}%`;
+      let filteredTasks = data.tasks;
+      if (discFilter) {
+        filteredTasks = filteredTasks.filter(t => t.discipline && t.discipline.toLowerCase() === discFilter);
+      }
+
+      const leafTasks = filteredTasks.filter(t => t.level >= 5);
+      const targetTasks = leafTasks.length ? leafTasks : filteredTasks;
+
+      const totalCount = targetTasks.length;
+      const completedCount = targetTasks.filter(t => t.status === 'completed').length;
+      const inProgressCount = targetTasks.filter(t => t.status === 'in_progress').length;
+      const notStartedCount = targetTasks.filter(t => t.status === 'not_started' || !t.status).length;
+      const pendingApprovals = filteredTasks.reduce((acc, a) => acc + (Number(a.pending_count) || 0), 0);
+      const progressPct = totalCount ? Math.round((completedCount / totalCount) * 100) : 0;
+
+      document.getElementById('statTotal').textContent = totalCount;
+      document.getElementById('statCompleted').textContent = completedCount;
+      document.getElementById('statInProgress').textContent = inProgressCount;
+      document.getElementById('statNotStarted').textContent = notStartedCount;
+      document.getElementById('statPending').textContent = pendingApprovals;
+
+      const discLabel = discFilter ? ` (${discFilter.toUpperCase()})` : '';
+      document.getElementById('projectTitleHeader').textContent = `Project ${data.project_id}${discLabel} Execution Analytics`;
+      document.getElementById('supervisorsBadge').textContent = `${data.summary.assigned_supervisors_count || 0} Supervisors Assigned`;
+      document.getElementById('progressPctText').textContent = `${progressPct}% (${completedCount}/${totalCount} tasks)`;
+
+      // Render 3-Color Donut / Pie Chart (Right Side)
+      const pieContainer = document.getElementById('adminPieChartContainer');
+      if (pieContainer) {
+        pieContainer.innerHTML = renderPieChartHTML({
+          completed: completedCount,
+          in_progress: inProgressCount,
+          not_started: notStartedCount
+        });
+      }
+
+      // Render Expected vs Actual Task Comparison Bar Graph (Left Side)
+      const barContainer = document.getElementById('adminBarGraphContainer');
+      if (barContainer) {
+        barContainer.innerHTML = renderTaskComparisonBarChartHTML(targetTasks.slice(0, 6));
+      }
 
       renderTasksTable();
     }

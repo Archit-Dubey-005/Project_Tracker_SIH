@@ -326,19 +326,38 @@ function renderTaskComparisonBarChartHTML(tasksList) {
   const processed = tasksList.map((t, idx) => {
     const taskName = t.description || t.wbs_code || `Task ${idx + 1}`;
     const code = t.wbs_code || `T${idx+1}`;
-    const expected = t.expected_days || (t.planned_end && t.planned_start ? Math.max(1, Math.round((new Date(t.planned_end) - new Date(t.planned_start)) / 86400000) + 1) : 5);
     
+    // Calculate expected days from planned_start and planned_end
+    let expected = t.expected_days;
+    if (!expected) {
+      if (t.planned_start && t.planned_end) {
+        const pStart = new Date(t.planned_start);
+        const pEnd = new Date(t.planned_end);
+        expected = Math.max(1, Math.round((pEnd - pStart) / 86400000) + 1);
+      } else {
+        expected = 5;
+      }
+    }
+    
+    // Calculate actual days from actual_start & actual_end, or elapsed schedule dates
     let actual = t.actual_days;
     if (actual === undefined || actual === null) {
-      if (t.status === 'completed') {
+      if (t.actual_start && t.actual_end) {
+        const aStart = new Date(t.actual_start);
+        const aEnd = new Date(t.actual_end);
+        actual = Math.max(1, Math.round((aEnd - aStart) / 86400000) + 1);
+      } else if (t.status === 'completed') {
         actual = t.is_late ? expected + (t.delay_days || 3) : expected;
       } else if (t.status === 'in_progress') {
-        const pEnd = new Date(t.planned_end || Date.now());
+        const pStart = new Date(t.planned_start || Date.now());
         const today = new Date();
-        actual = today > pEnd ? expected + 4 : Math.max(1, expected - 1);
+        const elapsed = Math.max(1, Math.round((today - pStart) / 86400000) + 1);
+        actual = (t.planned_end && today > new Date(t.planned_end)) ? Math.max(expected + 3, elapsed) : Math.min(expected, elapsed);
       } else if (t.planned_end && new Date(t.planned_end) < new Date() && t.status !== 'completed') {
-        // Overdue task
-        actual = expected + 4;
+        // Overdue task (Planned end passed)
+        const pStart = new Date(t.planned_start || Date.now());
+        const today = new Date();
+        actual = Math.max(expected + 3, Math.round((today - pStart) / 86400000) + 1);
       } else {
         actual = 0;
       }
