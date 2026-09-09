@@ -130,19 +130,35 @@
 
       let html = '';
 
-      // Project Header Card (L1)
+      // Calculate total counts for pie chart
+      const inProgCount = totalLeaves.filter(a => a.status === 'in_progress').length;
+      const notStartCount = totalLeaves.filter(a => a.status === 'not_started' || !a.status).length;
+
+      // Project Header Card with Dual Chart Layout
       const projectNode = l1List[0] || { wbs_code: 'P1', description: 'Project Schedule Baseline' };
       html += `
-        <div class="wbs-project-card">
-          <div class="wbs-project-header">
+        <div class="chart-panel-card card-highlight" style="margin-bottom:20px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:16px;">
             <div>
-              <span class="pill">${escapeHtml(projectNode.wbs_code)}</span>
-              <span style="margin-left: 8px;">${escapeHtml(projectNode.description)}</span>
+              <span class="pill" style="font-size:12px; padding:3px 10px;">${escapeHtml(projectNode.wbs_code)}</span>
+              <b style="font-size:18px; margin-left:8px; color:var(--text);">${escapeHtml(projectNode.description)}</b>
             </div>
-            <div style="font-size:14px; color:var(--muted)">Overall Progress: <b style="color:var(--good); font-size:16px">${pct}%</b> (${completedCount}/${totalLeaves.length})</div>
+            <div style="font-size:14px; color:var(--muted)">
+              Overall Completion: <b style="color:var(--good); font-size:18px">${pct}%</b> (${completedCount}/${totalLeaves.length} Tasks)
+            </div>
           </div>
-          <div class="score-bar" style="height:6px;">
-            <div class="score-fill" style="width:${pct}%; background:var(--good)"></div>
+
+          <div class="chart-grid">
+            <!-- Left Side: Task Comparison Bar Graph -->
+            <div class="chart-left-side">
+              ${renderTaskComparisonBarChartHTML(totalLeaves.slice(0, 6))}
+            </div>
+
+            <!-- Right Side: 3-Color Donut / Pie Chart -->
+            <div class="chart-right-side">
+              <b style="font-size:14px; display:block; margin-bottom:14px; text-align:center; color:var(--text);">WBS Status Pie Chart</b>
+              ${renderPieChartHTML({ completed: completedCount, in_progress: inProgCount, not_started: notStartCount })}
+            </div>
           </div>
         </div>
         <div class="wbs-tree">`;

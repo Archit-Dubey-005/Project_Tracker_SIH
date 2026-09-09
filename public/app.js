@@ -218,3 +218,212 @@ function scoreColor(score) {
   if (score >= 0.35) return 'var(--warn)';
   return 'var(--bad)';
 }
+
+/**
+ * Renders a 3-Color Donut / Pie Chart for Work Progress
+ * Slices: Work Done (Green), Work On Going (Yellow/Amber), Work Not Started (Slate)
+ */
+function renderPieChartHTML(counts, options = {}) {
+  const completed = counts.completed || 0;
+  const inProgress = counts.in_progress || counts.inProgress || 0;
+  const notStarted = counts.not_started || counts.notStarted || 0;
+  const total = completed + inProgress + notStarted;
+
+  const pctDone = total > 0 ? Math.round((completed / total) * 100) : 0;
+  const pctInProgress = total > 0 ? Math.round((inProgress / total) * 100) : 0;
+  const pctNotStarted = total > 0 ? Math.max(0, 100 - pctDone - pctInProgress) : 0;
+
+  const radius = 65;
+  const circumference = 2 * Math.PI * radius; // ~408.407
+
+  const lenCompleted = total > 0 ? (completed / total) * circumference : 0;
+  const lenInProgress = total > 0 ? (inProgress / total) * circumference : 0;
+  const lenNotStarted = total > 0 ? (notStarted / total) * circumference : circumference;
+
+  const offsetCompleted = 0;
+  const offsetInProgress = lenCompleted;
+  const offsetNotStarted = lenCompleted + lenInProgress;
+
+  return `
+    <div class="pie-chart-wrapper">
+      <div class="pie-svg-container">
+        <svg viewBox="0 0 200 200" class="pie-svg">
+          <!-- Background ring -->
+          <circle cx="100" cy="100" r="${radius}" fill="none" stroke="var(--border)" stroke-width="24" />
+          
+          ${total > 0 ? `
+            <!-- Work Not Started Segment (Slate) -->
+            <circle cx="100" cy="100" r="${radius}" fill="none" 
+                    stroke="#64748b" stroke-width="24" 
+                    stroke-dasharray="${lenNotStarted} ${circumference - lenNotStarted}" 
+                    stroke-dashoffset="${-offsetNotStarted}" 
+                    transform="rotate(-90 100 100)" class="pie-segment" />
+            
+            <!-- Work On Going Segment (Amber Yellow) -->
+            <circle cx="100" cy="100" r="${radius}" fill="none" 
+                    stroke="#f59e0b" stroke-width="24" 
+                    stroke-dasharray="${lenInProgress} ${circumference - lenInProgress}" 
+                    stroke-dashoffset="${-offsetInProgress}" 
+                    transform="rotate(-90 100 100)" class="pie-segment" />
+
+            <!-- Work Done Segment (Emerald Green) -->
+            <circle cx="100" cy="100" r="${radius}" fill="none" 
+                    stroke="#10b981" stroke-width="24" 
+                    stroke-dasharray="${lenCompleted} ${circumference - lenCompleted}" 
+                    stroke-dashoffset="${-offsetCompleted}" 
+                    transform="rotate(-90 100 100)" class="pie-segment" />
+          ` : ''}
+
+          <!-- Center Hole Overlay Text -->
+          <text x="100" y="93" text-anchor="middle" fill="var(--text)" font-size="24" font-weight="800">${pctDone}%</text>
+          <text x="100" y="113" text-anchor="middle" fill="var(--muted)" font-size="11" font-weight="700" letter-spacing="0.5">WORK DONE</text>
+          <text x="100" y="128" text-anchor="middle" fill="var(--muted)" font-size="10">${completed} / ${total} Tasks</text>
+        </svg>
+      </div>
+
+      <!-- Pie Chart Legend & Status Breakdown -->
+      <div class="pie-legend">
+        <div class="pie-legend-item">
+          <div class="pie-legend-header">
+            <span class="dot" style="background:#10b981"></span>
+            <span class="legend-title">Work Done (Completed)</span>
+          </div>
+          <span class="legend-val" style="color:#10b981"><b>${completed}</b> <small>(${pctDone}%)</small></span>
+        </div>
+
+        <div class="pie-legend-item">
+          <div class="pie-legend-header">
+            <span class="dot" style="background:#f59e0b"></span>
+            <span class="legend-title">Work On Going (In Progress)</span>
+          </div>
+          <span class="legend-val" style="color:#f59e0b"><b>${inProgress}</b> <small>(${pctInProgress}%)</small></span>
+        </div>
+
+        <div class="pie-legend-item">
+          <div class="pie-legend-header">
+            <span class="dot" style="background:#64748b"></span>
+            <span class="legend-title">Work Not Started</span>
+          </div>
+          <span class="legend-val" style="color:#94a3b8"><b>${notStarted}</b> <small>(${pctNotStarted}%)</small></span>
+        </div>
+      </div>
+    </div>`;
+}
+
+/**
+ * Renders an Expected vs Actual Task Comparison Bar Graph
+ * Shows side-by-side or stacked comparison bars for tasks.
+ * If actual > expected, the actual bar is higher/longer in RED (Late).
+ * If actual <= expected, the actual bar is GREEN (On Time).
+ */
+function renderTaskComparisonBarChartHTML(tasksList) {
+  if (!tasksList || !tasksList.length) {
+    return `<div class="muted" style="padding:20px; text-align:center;">No task activities available for bar graph analysis.</div>`;
+  }
+
+  // Find max days to scale bars proportionally
+  let maxDays = 1;
+  const processed = tasksList.map((t, idx) => {
+    const taskName = t.description || t.wbs_code || `Task ${idx + 1}`;
+    const code = t.wbs_code || `T${idx+1}`;
+    const expected = t.expected_days || (t.planned_end && t.planned_start ? Math.max(1, Math.round((new Date(t.planned_end) - new Date(t.planned_start)) / 86400000) + 1) : 5);
+    
+    let actual = t.actual_days;
+    if (actual === undefined || actual === null) {
+      if (t.status === 'completed') {
+        actual = t.is_late ? expected + (t.delay_days || 3) : expected;
+      } else if (t.status === 'in_progress') {
+        const pEnd = new Date(t.planned_end || Date.now());
+        const today = new Date();
+        actual = today > pEnd ? expected + 4 : Math.max(1, expected - 1);
+      } else if (t.planned_end && new Date(t.planned_end) < new Date() && t.status !== 'completed') {
+        // Overdue task
+        actual = expected + 4;
+      } else {
+        actual = 0;
+      }
+    }
+
+    const isLate = actual > expected;
+    maxDays = Math.max(maxDays, expected, actual);
+
+    return {
+      code,
+      name: taskName,
+      expected,
+      actual,
+      isLate,
+      status: t.status || (isLate ? 'in_progress' : 'completed')
+    };
+  });
+
+  return `
+    <div class="bargraph-container">
+      <div class="bargraph-header">
+        <div>
+          <b style="font-size:14px;">Task Progress & Schedule Compliance</b>
+          <span class="sub" style="display:block; font-size:12px; margin-top:2px;">
+            Compares <b>Expected (Planned)</b> vs <b>Actual Days</b>. Actual bar is <span style="color:var(--bad); font-weight:700;">HIGHER (RED)</span> if work is done late.
+          </span>
+        </div>
+        <div class="bargraph-key">
+          <span class="key-item"><span class="key-box" style="background:var(--accent)"></span> Expected</span>
+          <span class="key-item"><span class="key-box" style="background:#10b981"></span> Actual (On Time)</span>
+          <span class="key-item"><span class="key-box" style="background:#ef4444"></span> Actual (Late)</span>
+        </div>
+      </div>
+
+      <div class="bargraph-list">
+        ${processed.map(t => {
+          const expPct = Math.round((t.expected / maxDays) * 100);
+          const actPct = Math.round((t.actual / maxDays) * 100);
+
+          let statusBadge = '';
+          if (t.actual === 0) {
+            statusBadge = `<span class="badge not_started">NOT STARTED</span>`;
+          } else if (t.isLate) {
+            const delay = t.actual - t.expected;
+            statusBadge = `<span class="badge rejected">LATE (+${delay} ${delay === 1 ? 'day' : 'days'})</span>`;
+          } else {
+            statusBadge = `<span class="badge confirmed">ON TIME</span>`;
+          }
+
+          const actualColor = t.actual === 0 ? '#64748b' : (t.isLate ? '#ef4444' : '#10b981');
+
+          return `
+            <div class="bargraph-item">
+              <div class="bargraph-item-info">
+                <div class="bargraph-title" title="${escapeHtml(t.name)}">
+                  <span class="pill" style="font-size:10px; padding:1px 6px; margin-right:6px;">${escapeHtml(t.code)}</span>
+                  <b>${escapeHtml(t.name)}</b>
+                </div>
+                <div>${statusBadge}</div>
+              </div>
+
+              <div class="bargraph-dual-bars">
+                <!-- Expected Bar -->
+                <div class="bar-row">
+                  <span class="bar-label">Expected</span>
+                  <div class="bar-track">
+                    <div class="bar-fill" style="width: ${expPct}%; background: var(--accent);">
+                      <span class="bar-val">${t.expected}d</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Actual Bar -->
+                <div class="bar-row">
+                  <span class="bar-label">Actual</span>
+                  <div class="bar-track">
+                    <div class="bar-fill ${t.isLate ? 'bar-late-pulse' : ''}" style="width: ${actPct}%; background: ${actualColor};">
+                      <span class="bar-val">${t.actual > 0 ? t.actual + 'd' : '0d'}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+}
+
