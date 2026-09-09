@@ -39,7 +39,13 @@ async function login(req, res, next) {
     if (cleanRole) {
       const userRole = (user.role || '').toLowerCase();
       const userDisc = (user.discipline || '').toLowerCase();
-      if (userRole !== cleanRole && userDisc !== cleanRole) {
+      if (cleanRole === 'general') {
+        if (userRole !== 'supervisor' && userDisc !== 'general') {
+          return res.status(401).json({
+            error: `Role mismatch: This account (${user.name}) is assigned to ${user.role.toUpperCase()}${user.discipline ? ' / ' + user.discipline.toUpperCase() : ''}, which does not match "${role.toUpperCase()}".`
+          });
+        }
+      } else if (userRole !== cleanRole && userDisc !== cleanRole) {
         return res.status(401).json({
           error: `Role mismatch: This account (${user.name}) is assigned to ${user.role.toUpperCase()}${user.discipline ? ' / ' + user.discipline.toUpperCase() : ''}, which does not match "${role.toUpperCase()}".`
         });
