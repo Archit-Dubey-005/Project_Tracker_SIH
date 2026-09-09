@@ -1,6 +1,7 @@
 const { randomUUID: uuid } = require('crypto');
 const XLSX = require('xlsx');
 const db = require('../config/db');
+const scheduleImportService = require('../services/scheduleImportService');
 
 /**
  * List all users with project_id and role metadata
@@ -198,7 +199,9 @@ async function getProjectTasks(req, res, next) {
 }
 
 /**
- * Admin: Upload and import master schedule for a specific project
+ * Admin: Upload and import master schedule for a specific project.
+ * Extracts: id, wbs_code, level, parent_id, discipline, description, planned_start, planned_end
+ * and writes directly to the activities database table.
  */
 async function uploadSchedule(req, res, next) {
   if (!req.file) return res.status(400).json({ error: 'Spreadsheet file (.xlsx or .csv) is required.' });
@@ -206,79 +209,16 @@ async function uploadSchedule(req, res, next) {
   const targetProjId = rawProjId.toUpperCase();
 
   try {
-    const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
-    const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
-
-    if (!rows.length) return res.status(400).json({ error: 'No rows found in the uploaded sheet.' });
-
-    const [existing] = await db.query(
-      'SELECT id, wbs_code FROM activities WHERE UPPER(project_id) = ? OR project_id IS NULL',
-      [targetProjId]
-    );
-    const wbsToId = {};
-    existing.forEach(a => { wbsToId[a.wbs_code] = a.id; });
-
-    let created = 0;
-    let updated = 0;
-    const connection = await db.getConnection();
-
-    try {
-      await connection.beginTransaction();
-
-      for (const row of rows) {
-        const wbs = String(row['WBS Code'] || row['wbs_code'] || row['WBS'] || row['wbs'] || '').trim();
-        if (!wbs) continue;
-
-        const level = Number(row['Level'] || row['level'] || row['L'] || 5);
-        const parentWbs = String(row['Parent WBS'] || row['parent_wbs'] || row['Parent'] || '').trim();
-        const discipline = String(row['Discipline'] || row['discipline'] || row['Disc'] || 'general').trim().toLowerCase();
-        const description = String(row['Description'] || row['description'] || row['Task'] || row['Activity'] || '').trim();
-        const plannedStart = row['Planned Start'] || row['planned_start'] || row['Start'] || null;
-        const plannedEnd = row['Planned End'] || row['planned_end'] || row['Finish'] || row['End'] || null;
-        const rowProjId = String(row['Project ID'] || row['project_id'] || row['Project'] || targetProjId).trim().toUpperCase();
-
-        const parentId = parentWbs && wbsToId[parentWbs] ? wbsToId[parentWbs] : null;
-
-        if (wbsToId[wbs]) {
-          await connection.query(
-            `UPDATE activities
-             SET level=?, parent_id=?, discipline=?, description=?, planned_start=?, planned_end=?, source='admin_schedule_upload', project_id=?
-             WHERE wbs_code=?`,
-            [level, parentId, discipline, description, plannedStart || null, plannedEnd || null, rowProjId, wbs]
-          );
-          updated++;
-        } else {
-          const id = uuid();
-          await connection.query(
-            `INSERT INTO activities (id, project_id, wbs_code, level, parent_id, discipline, description, planned_start, planned_end, status, source)
-             VALUES (?,?,?,?,?,?,?,?,?,'not_started','admin_schedule_upload')`,
-            [id, rowProjId, wbs, level, parentId, discipline, description, plannedStart || null, plannedEnd || null]
-          );
-          wbsToId[wbs] = id;
-          created++;
-        }
-      }
-
-      await connection.commit();
-      res.status(201).json({
-        ok: true,
-        project_id: targetProjId,
-        rows_processed: rows.length,
-        activities_created: created,
-        activities_updated: updated,
-        message: `Schedule for Project ${targetProjId} processed: ${created} created, ${updated} updated.`
-      });
-    } catch (err) {
-      await connection.rollback();
-      throw err;
-    } finally {
-      connection.release();
-    }
+    const result = await scheduleImportService.importScheduleFromBuffer(req.file.buffer, targetProjId);
+    res.status(201).json({
+      ...result,
+      message: `Schedule for Project ${targetProjId} processed: ${result.activities_created} created, ${result.activities_updated} updated.`
+    });
   } catch (err) {
     next(err);
   }
 }
+
 
 /**
  * Admin: Seed or restore default multi-discipline baseline for a project

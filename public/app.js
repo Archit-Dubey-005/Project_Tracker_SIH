@@ -172,27 +172,9 @@ async function renderTopbar(activePage) {
   bar.innerHTML = `
     <div class="topbar-left">
       <a href="index.html" class="brand-link-wrapper" title="SiteBridge AI Homepage">
-        <!-- Logo Placeholder (Top-Left Corner) -->
-        <div class="logo-placeholder" id="logoPlaceholder" title="SiteBridge AI Logo Placeholder">
-          <div class="logo-placeholder-graphic">
-            <svg class="logo-svg" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <defs>
-                <linearGradient id="sbLogoGrad" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
-                  <stop stop-color="#2563eb" />
-                  <stop offset="1" stop-color="#0284c7" />
-                </linearGradient>
-              </defs>
-              <rect width="32" height="32" rx="8" fill="url(#sbLogoGrad)" />
-              <path d="M5 22C9 15.5 12.5 13.5 16 13.5C19.5 13.5 23 15.5 27 22" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" />
-              <path d="M8 22V17M16 22V13.5M24 22V17" stroke="#ffffff" stroke-width="1.6" stroke-linecap="round" />
-              <circle cx="16" cy="8" r="2.5" fill="#a5f3fc" />
-              <circle cx="9" cy="11" r="1.8" fill="#ffffff" />
-              <circle cx="23" cy="11" r="1.8" fill="#ffffff" />
-              <line x1="9" y1="11" x2="16" y2="8" stroke="#a5f3fc" stroke-width="1.2" stroke-dasharray="1.5 1.5" />
-              <line x1="23" y1="11" x2="16" y2="8" stroke="#a5f3fc" stroke-width="1.2" stroke-dasharray="1.5 1.5" />
-            </svg>
-          </div>
-          <span class="logo-placeholder-badge" title="Logo Placeholder">LOGO</span>
+        <!-- Logo (Top-Left Corner) -->
+        <div class="site-logo-box" id="siteLogo" title="SiteBridge AI">
+          <img src="Logo.jpeg" alt="SiteBridge AI Logo" class="site-logo-img" />
         </div>
         <div class="brand">
           <span class="brand-title">SiteBridge AI</span>

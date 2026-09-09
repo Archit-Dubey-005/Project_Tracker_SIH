@@ -22,7 +22,9 @@
       <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:8px;">
         <div>
           <b style="font-size:16px;">Master Schedule Upload &amp; Baseline Import (Admin Access)</b>
-          <p class="sub" style="margin-top:2px;">Upload a master project baseline schedule file (.xlsx / .csv). Once uploaded, the schedule is saved into the database and visible across all discipline views (Civil, Piping, Electrical, etc.).</p>
+          <p class="sub" style="margin-top:2px;">
+            Upload a spreadsheet (.xlsx / .csv) to extract <code>id, wbs_code, level, parent_id, discipline, description, planned_start, planned_end</code> and write directly to the activities database table.
+          </p>
         </div>
         <button type="button" class="secondary" onclick="downloadMasterTemplate()" style="font-size:12px; padding:6px 12px; margin:0;">📥 Download Sample CSV Template</button>
       </div>
@@ -30,7 +32,7 @@
       <div class="row" style="margin-top:14px; gap:12px; align-items:center; flex-wrap:wrap;">
         <input type="file" id="baselineFile" accept=".xlsx,.csv" style="flex:2; min-width:240px;" />
         <button type="button" id="importBtn" style="padding:8px 18px;">
-          📤 Upload &amp; Publish Master Schedule
+          📤 Upload &amp; Write to Activities Table
         </button>
         <button type="button" class="secondary" id="seedMasterBtn" style="padding:8px 14px;" title="Reset or restore default multi-discipline baseline">
           ⚡ Reset Multi-Discipline Master Baseline

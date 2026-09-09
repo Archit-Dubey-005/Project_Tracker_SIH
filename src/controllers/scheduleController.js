@@ -1,6 +1,7 @@
 const { randomUUID: uuid } = require('crypto');
 const XLSX = require('xlsx');
 const db = require('../config/db');
+const scheduleImportService = require('../services/scheduleImportService');
 
 async function listActivities(req, res, next) {
   const { discipline, project_id } = req.query;
@@ -49,20 +50,20 @@ async function getActivity(req, res, next) {
 }
 
 async function downloadTemplate(req, res) {
-  const csvContent = `Project ID,WBS Code,Level,Parent WBS,Discipline,Description,Planned Start,Planned End
-P1,P1,1,,project,Refinery Debottlenecking Master Schedule,2026-01-01,2026-12-31
-P1,P1.CIV,3,P1,civil,Civil - Main Civil & Substructure Foundations,2026-01-15,2026-04-30
-P1,P1.CIV.001,5,P1.CIV,civil,Excavation for Foundation F-12,2026-01-20,2026-01-25
-P1,P1.CIV.002,5,P1.CIV,civil,Rebar Fixing Foundation F-12,2026-01-26,2026-01-30
-P1,P1.CIV.003,5,P1.CIV,civil,Concrete Pour Foundation F-12,2026-02-01,2026-02-03
-P1,P1.PIP,3,P1,piping,Piping - Unit 24 Process Lines & Headers,2026-02-01,2026-06-30
-P1,P1.PIP.001,5,P1.PIP,piping,Erect Line 24"-XX Header Spools,2026-03-10,2026-03-14
-P1,P1.PIP.002,5,P1.PIP,piping,Weld Line 24"-XX Joints 3 to 7,2026-03-15,2026-03-18
-P1,P1.PIP.003,5,P1.PIP,piping,Hydro Test Line 24"-XX,2026-03-19,2026-03-21
-P1,P1.ELE,3,P1,electrical,Electrical - Substation 3 Cabling & Panels,2026-03-01,2026-07-31
-P1,P1.ELE.001,5,P1.ELE,electrical,Cable Laying Substation 3 Panel A,2026-04-01,2026-04-05
-P1,P1.ELE.002,5,P1.ELE,electrical,Cable Termination Substation 3 Panel A,2026-04-06,2026-04-08
-P1,P1.ELE.003,5,P1.ELE,electrical,Megger Testing Substation 3 Panel A,2026-04-09,2026-04-10`;
+  const csvContent = `id,wbs_code,level,parent_id,discipline,description,planned_start,planned_end,project_id
+proj-p1,P1,1,,project,Refinery Debottlenecking Master Schedule,2026-01-01,2026-12-31,P1
+area-civil,P1.CIV,3,proj-p1,civil,Civil - Main Civil & Substructure Foundations,2026-01-15,2026-04-30,P1
+act-civ-001,P1.CIV.001,5,area-civil,civil,Excavation for Foundation F-12,2026-01-20,2026-01-25,P1
+act-civ-002,P1.CIV.002,5,area-civil,civil,Rebar Fixing Foundation F-12,2026-01-26,2026-01-30,P1
+act-civ-003,P1.CIV.003,5,area-civil,civil,Concrete Pour Foundation F-12,2026-02-01,2026-02-03,P1
+area-piping,P1.PIP,3,proj-p1,piping,Piping - Unit 24 Process Lines & Headers,2026-02-01,2026-06-30,P1
+act-pip-001,P1.PIP.001,5,area-piping,piping,Erect Line 24"-XX Header Spools,2026-03-10,2026-03-14,P1
+act-pip-002,P1.PIP.002,5,area-piping,piping,Weld Line 24"-XX Joints 3 to 7,2026-03-15,2026-03-18,P1
+act-pip-003,P1.PIP.003,5,area-piping,piping,Hydro Test Line 24"-XX,2026-03-19,2026-03-21,P1
+area-elec,P1.ELE,3,proj-p1,electrical,Electrical - Substation 3 Cabling & Panels,2026-03-01,2026-07-31,P1
+act-ele-001,P1.ELE.001,5,area-elec,electrical,Cable Laying Substation 3 Panel A,2026-04-01,2026-04-05,P1
+act-ele-002,P1.ELE.002,5,area-elec,electrical,Cable Termination Substation 3 Panel A,2026-04-06,2026-04-08,P1
+act-ele-003,P1.ELE.003,5,area-elec,electrical,Megger Testing Substation 3 Panel A,2026-04-09,2026-04-10,P1`;
 
   res.setHeader('Content-Type', 'text/csv');
   res.setHeader('Content-Disposition', 'attachment; filename="master_schedule_template.csv"');
@@ -72,66 +73,14 @@ P1,P1.ELE.003,5,P1.ELE,electrical,Megger Testing Substation 3 Panel A,2026-04-09
 async function importBaseline(req, res, next) {
   if (!req.file) return res.status(400).json({ error: 'file is required (field name: file)' });
 
+  const targetProjId = String(req.body.project_id || (req.user && req.user.project_id) || 'P1').trim().toUpperCase();
+
   try {
-    const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
-    const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
-
-    if (!rows.length) return res.status(400).json({ error: 'No rows found in sheet' });
-
-    const [existing] = await db.query('SELECT id, wbs_code FROM activities');
-    const wbsToId = {};
-    existing.forEach(a => { wbsToId[a.wbs_code] = a.id; });
-
-    let created = 0;
-    let updated = 0;
-    const connection = await db.getConnection();
-
-    try {
-      await connection.beginTransaction();
-
-      for (const row of rows) {
-        const wbs = String(row['WBS Code'] || row['wbs_code'] || row['WBS'] || row['wbs'] || '').trim();
-        if (!wbs) continue;
-
-        const level = Number(row['Level'] || row['level'] || row['L'] || 5);
-        const parentWbs = String(row['Parent WBS'] || row['parent_wbs'] || row['Parent'] || '').trim();
-        const discipline = String(row['Discipline'] || row['discipline'] || row['Disc'] || 'general').trim().toLowerCase();
-        const description = String(row['Description'] || row['description'] || row['Task'] || row['Activity'] || '').trim();
-        const plannedStart = row['Planned Start'] || row['planned_start'] || row['Start'] || null;
-        const plannedEnd = row['Planned End'] || row['planned_end'] || row['Finish'] || row['End'] || null;
-        const projectId = String(row['Project ID'] || row['project_id'] || row['Project'] || req.body.project_id || 'P1').trim().toUpperCase();
-
-        const parentId = parentWbs && wbsToId[parentWbs] ? wbsToId[parentWbs] : null;
-
-        if (wbsToId[wbs]) {
-          await connection.query(
-            `UPDATE activities
-             SET level=?, parent_id=?, discipline=?, description=?, planned_start=?, planned_end=?, source='master_schedule_import', project_id=?
-             WHERE wbs_code=?`,
-            [level, parentId, discipline, description, plannedStart || null, plannedEnd || null, projectId, wbs]
-          );
-          updated++;
-        } else {
-          const id = uuid();
-          await connection.query(
-            `INSERT INTO activities (id, project_id, wbs_code, level, parent_id, discipline, description, planned_start, planned_end, status, source)
-             VALUES (?,?,?,?,?,?,?,?,?,'not_started','master_schedule_import')`,
-            [id, projectId, wbs, level, parentId, discipline, description, plannedStart || null, plannedEnd || null]
-          );
-          wbsToId[wbs] = id;
-          created++;
-        }
-      }
-
-      await connection.commit();
-      res.status(201).json({ rows_processed: rows.length, activities_created: created, activities_updated: updated });
-    } catch (err) {
-      await connection.rollback();
-      throw err;
-    } finally {
-      connection.release();
-    }
+    const result = await scheduleImportService.importScheduleFromBuffer(req.file.buffer, targetProjId);
+    res.status(201).json({
+      ...result,
+      message: `Schedule processed: ${result.activities_created} created, ${result.activities_updated} updated in database activities table.`
+    });
   } catch (err) {
     next(err);
   }

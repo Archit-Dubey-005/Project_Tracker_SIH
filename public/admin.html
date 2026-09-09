@@ -305,7 +305,31 @@
     <div id="tabSchedule" class="tab-content" style="display:none;">
       <div class="card card-highlight" style="border-left: 4px solid var(--accent);">
         <b style="font-size:18px; display:block; margin-bottom:4px;">Upload Master Schedule &amp; Baseline Import</b>
-        <p class="sub" style="font-size:13px; margin-bottom:18px;">Upload a master project baseline schedule file (.xlsx / .csv). Activities are parsed and attached to the target Project ID in the MySQL database.</p>
+        <p class="sub" style="font-size:13px; margin-bottom:18px;">
+          Upload a project schedule spreadsheet (.xlsx / .csv). The system extracts
+          <code style="color:var(--accent); font-weight:700;">id</code>,
+          <code style="color:var(--accent); font-weight:700;">wbs_code</code>,
+          <code style="color:var(--accent); font-weight:700;">level</code>,
+          <code style="color:var(--accent); font-weight:700;">parent_id</code>,
+          <code style="color:var(--accent); font-weight:700;">discipline</code>,
+          <code style="color:var(--accent); font-weight:700;">description</code>,
+          <code style="color:var(--accent); font-weight:700;">planned_start</code>,
+          <code style="color:var(--accent); font-weight:700;">planned_end</code>
+          and writes them directly into the <code>activities</code> table of the MySQL database.
+        </p>
+
+        <!-- Column Tags Legend -->
+        <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:18px;">
+          <span style="font-size:11px; font-weight:700; color:var(--muted); text-transform:uppercase; margin-right:4px; align-self:center;">Extracted Columns:</span>
+          <span class="badge" style="background:rgba(59,130,246,0.12); color:var(--accent); font-family:monospace; font-size:11px;">id</span>
+          <span class="badge" style="background:rgba(59,130,246,0.12); color:var(--accent); font-family:monospace; font-size:11px;">wbs_code</span>
+          <span class="badge" style="background:rgba(59,130,246,0.12); color:var(--accent); font-family:monospace; font-size:11px;">level</span>
+          <span class="badge" style="background:rgba(59,130,246,0.12); color:var(--accent); font-family:monospace; font-size:11px;">parent_id</span>
+          <span class="badge" style="background:rgba(59,130,246,0.12); color:var(--accent); font-family:monospace; font-size:11px;">discipline</span>
+          <span class="badge" style="background:rgba(59,130,246,0.12); color:var(--accent); font-family:monospace; font-size:11px;">description</span>
+          <span class="badge" style="background:rgba(59,130,246,0.12); color:var(--accent); font-family:monospace; font-size:11px;">planned_start</span>
+          <span class="badge" style="background:rgba(59,130,246,0.12); color:var(--accent); font-family:monospace; font-size:11px;">planned_end</span>
+        </div>
 
         <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px; align-items:flex-start;">
           <!-- Upload Form -->
@@ -318,17 +342,17 @@
             <label for="scheduleFileInput">Spreadsheet File (.xlsx, .csv) *</label>
             <input type="file" id="scheduleFileInput" accept=".xlsx,.csv,.xls" style="margin-bottom:18px;" />
 
-            <div id="uploadResultBox" style="display:none; padding:10px 14px; border-radius:8px; font-size:13px; margin-bottom:14px;"></div>
+            <div id="uploadResultBox" style="display:none; padding:12px 14px; border-radius:8px; font-size:13px; margin-bottom:14px;"></div>
 
             <button type="button" id="uploadScheduleBtn" onclick="handleScheduleUpload()" style="width:100%;">
-              📤 Upload &amp; Publish Schedule
+              📤 Upload &amp; Write to Activities Table
             </button>
           </div>
 
           <!-- Template & Quick Reset Tools -->
           <div style="background:var(--card-sub); border:1px solid var(--border); border-radius:10px; padding:18px;">
             <b style="font-size:14px; display:block; margin-bottom:8px;">Tools &amp; Baseline Templates</b>
-            <p class="sub" style="font-size:12px; margin-bottom:16px;">Download a pre-formatted schedule template with columns <code>Project ID, WBS Code, Level, Parent WBS, Discipline, Description, Planned Start, Planned End</code>.</p>
+            <p class="sub" style="font-size:12px; margin-bottom:16px;">Download a sample CSV spreadsheet template with all extracted columns: <code>id, wbs_code, level, parent_id, discipline, description, planned_start, planned_end, project_id</code>.</p>
 
             <button type="button" class="secondary" onclick="downloadMasterTemplate()" style="width:100%; margin-top:0; margin-bottom:12px; text-align:left; padding:10px 14px;">
               📥 Download Sample Schedule Template CSV
@@ -671,7 +695,20 @@
         resBox.style.background = 'rgba(16, 185, 129, 0.15)';
         resBox.style.border = '1px solid rgba(16, 185, 129, 0.3)';
         resBox.style.color = 'var(--good)';
-        resBox.innerHTML = `✅ <b>Schedule Published for Project ${targetProjId}!</b><br/>Rows processed: ${res.rows_processed} · Created: ${res.activities_created} · Updated: ${res.activities_updated}`;
+        
+        let sampleHtml = '';
+        if (Array.isArray(res.sample_activities) && res.sample_activities.length) {
+          sampleHtml = `<div style="margin-top:8px; font-size:11px; opacity:0.9;">
+            <b>Extracted Sample Activities:</b>
+            <ul style="margin:4px 0 0 16px; padding:0;">
+              ${res.sample_activities.slice(0, 3).map(a => `<li><code>${escapeHtml(a.id)}</code> · ${escapeHtml(a.wbs_code || 'no-wbs')} · <b>${escapeHtml(a.description)}</b> (${escapeHtml(a.discipline)}) [${a.planned_start || '—'} → ${a.planned_end || '—'}]</li>`).join('')}
+            </ul>
+          </div>`;
+        }
+
+        resBox.innerHTML = `✅ <b>Schedule Written to Activities Table (Project ${targetProjId})!</b><br/>
+          Rows processed: <b>${res.rows_processed}</b> · Created: <b>${res.activities_created}</b> · Updated: <b>${res.activities_updated}</b>
+          ${sampleHtml}`;
 
         toast(`Schedule uploaded: ${res.activities_created} created, ${res.activities_updated} updated`);
         loadKnownProjects();
@@ -679,7 +716,7 @@
         setTimeout(() => {
           switchTab('tasks');
           loadProjectTasks(targetProjId);
-        }, 800);
+        }, 1200);
       } catch (err) {
         resBox.style.display = '';
         resBox.style.background = 'rgba(239, 68, 68, 0.15)';
@@ -688,7 +725,7 @@
         resBox.innerHTML = `❌ <b>Upload failed:</b> ${escapeHtml(err.message)}`;
       } finally {
         btn.disabled = false;
-        btn.textContent = '📤 Upload & Publish Schedule';
+        btn.textContent = '📤 Upload & Write to Activities Table';
       }
     }
 
