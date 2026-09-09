@@ -37,7 +37,7 @@
         <input type="password" id="loginPassword" placeholder="Enter your password" required style="margin-bottom: 12px;" />
 
         <label for="loginRole">Assigned Role / Discipline</label>
-        <select id="loginRole" style="margin-bottom: 20px;">
+        <select id="loginRole" onchange="onRoleChange()" style="margin-bottom: 12px;">
           <option value="civil">Civil Supervisor (civil)</option>
           <option value="piping">Piping Supervisor (piping)</option>
           <option value="electrical">Electrical Supervisor (electrical)</option>
@@ -45,16 +45,38 @@
           <option value="admin">Administrator (admin)</option>
         </select>
 
+        <div id="projectFieldGroup">
+          <label for="loginProjectId">Project ID <span id="projectNotice" style="color:var(--warn); font-size:11px; text-transform:none; font-weight:normal;">(Required for Supervisors — e.g. P1)</span></label>
+          <input type="text" id="loginProjectId" placeholder="e.g. P1" value="P1" required style="margin-bottom: 20px; font-weight:700; text-transform:uppercase;" />
+        </div>
+
         <button type="submit" style="width:100%">Verify Credentials &amp; Log In &rarr;</button>
       </form>
     </div>
   </main>
-  <script src="app.js?v=2.2"></script>
+  <script src="app.js?v=2.3"></script>
   <script>
     (async () => {
       await renderTopbar('index.html');
       checkSession();
+      onRoleChange();
     })();
+
+    function onRoleChange() {
+      const role = document.getElementById('loginRole').value;
+      const projNotice = document.getElementById('projectNotice');
+      const projInput = document.getElementById('loginProjectId');
+      if (role === 'admin') {
+        projNotice.textContent = '(Optional for Admin)';
+        projNotice.style.color = 'var(--muted)';
+        projInput.required = false;
+      } else {
+        projNotice.textContent = '(Required for Supervisors — e.g. P1)';
+        projNotice.style.color = 'var(--warn)';
+        projInput.required = true;
+        if (!projInput.value) projInput.value = 'P1';
+      }
+    }
 
     function checkSession() {
       const user = State.user;
@@ -65,20 +87,29 @@
         loggedInCard.style.display = '';
         loginCard.style.display = 'none';
 
-        document.getElementById('welcomeUser').textContent = `Welcome back, ${user.name}!`;
-        document.getElementById('welcomeRole').textContent = `Authenticated as ${user.role.toUpperCase()}${user.discipline ? ' (' + user.discipline.toUpperCase() + ')' : ''} — ${user.email || ''}`;
+        if (user.role === 'admin') {
+          document.getElementById('welcomeUser').textContent = `Admin Console: ${user.name}`;
+          document.getElementById('welcomeRole').innerHTML = `Authenticated as <b style="color:var(--bad)">Administrator</b> — <code>${escapeHtml(user.email || '')}</code><br/><span class="muted" style="font-size:13px;">Manage users, assign Project IDs, inspect all project tasks, and upload baseline master schedules.</span>`;
 
-        const actions = [];
-        if (['supervisor', 'planner', 'admin'].includes(user.role)) {
+          document.getElementById('actionButtons').innerHTML = `
+            <a href="admin.html" style="flex:1; text-decoration:none;">
+              <button style="width:100%; font-size:15px; padding:12px 18px; background:linear-gradient(135deg, #2563eb, #3b82f6);">
+                🛡️ Open Admin Portal (Add Users &amp; Project Tasks) &rarr;
+              </button>
+            </a>
+          `;
+        } else {
+          document.getElementById('welcomeUser').textContent = `Welcome back, ${user.name}!`;
+          document.getElementById('welcomeRole').textContent = `Authenticated as ${user.role.toUpperCase()}${user.discipline ? ' (' + user.discipline.toUpperCase() + ')' : ''} · Project ID: ${user.project_id || 'P1'} — ${user.email || ''}`;
+
+          const actions = [];
           actions.push('<a href="log.html" style="flex:1; text-decoration:none;"><button style="width:100%">Log Progress</button></a>');
           actions.push('<a href="approval.html" style="flex:1; text-decoration:none;"><button class="secondary" style="width:100%">Task Approval</button></a>');
-        }
-        actions.push('<a href="schedule.html" style="flex:1; text-decoration:none;"><button class="secondary" style="width:100%">Schedule Baseline</button></a>');
-        if (['supervisor', 'planner', 'admin'].includes(user.role)) {
+          actions.push('<a href="schedule.html" style="flex:1; text-decoration:none;"><button class="secondary" style="width:100%">Schedule Baseline</button></a>');
           actions.push('<a href="dashboard.html" style="flex:1; text-decoration:none;"><button class="secondary" style="width:100%">Dashboard</button></a>');
-        }
 
-        document.getElementById('actionButtons').innerHTML = actions.join('');
+          document.getElementById('actionButtons').innerHTML = actions.join('');
+        }
       } else {
         loggedInCard.style.display = 'none';
         loginCard.style.display = '';
@@ -90,23 +121,29 @@
       const email = document.getElementById('loginEmail').value.trim();
       const password = document.getElementById('loginPassword').value.trim();
       const role = document.getElementById('loginRole').value;
+      const project_id = document.getElementById('loginProjectId').value.trim().toUpperCase();
       const errBox = document.getElementById('loginError');
       errBox.style.display = 'none';
 
       try {
         const res = await api('/auth/login', {
           method: 'POST',
-          body: JSON.stringify({ email, password, role })
+          body: JSON.stringify({ email, password, role, project_id })
         });
 
         if (res.user) {
           State.user = res.user;
-          toast(`Successfully logged in as ${res.user.name}`);
-          renderTopbar('index.html');
-          checkSession();
+          if (res.user.role === 'admin') {
+            toast(`Logged in as Administrator. Opening Admin Portal...`);
+            setTimeout(() => { location.href = 'admin.html'; }, 300);
+          } else {
+            toast(`Successfully logged in as ${res.user.name} (Project: ${res.user.project_id || 'P1'})`);
+            renderTopbar('index.html');
+            checkSession();
+          }
         }
       } catch (err) {
-        errBox.innerHTML = escapeHtml(err.message || 'Invalid email, password, or role.');
+        errBox.innerHTML = escapeHtml(err.message || 'Invalid email, password, or project ID.');
         errBox.style.display = '';
       }
     }

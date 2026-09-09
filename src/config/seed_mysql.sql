@@ -5,19 +5,19 @@
 USE progress_tracker;
 
 -- Seed Default Users with Email & Password
-INSERT INTO users (id, name, email, password, role, discipline) VALUES
-  ('u-admin', 'Admin User', 'admin@project.com', 'admin123', 'admin', NULL),
-  ('u-planner', 'Rekha Iyer (Planner)', 'planner@project.com', 'planner123', 'planner', NULL),
-  ('u-civil', 'Suresh Patel', 'civil@project.com', 'civil123', 'supervisor', 'civil'),
-  ('u-piping', 'Alok Mehta', 'piping@project.com', 'piping123', 'supervisor', 'piping'),
-  ('u-electrical', 'Farhan Sheikh', 'electrical@project.com', 'electrical123', 'supervisor', 'electrical')
-ON DUPLICATE KEY UPDATE name=VALUES(name), email=VALUES(email), password=VALUES(password), role=VALUES(role), discipline=VALUES(discipline);
+INSERT INTO users (id, name, email, password, role, discipline, project_id) VALUES
+  ('u-admin', 'Admin User', 'admin@project.com', 'admin123', 'admin', NULL, 'P1'),
+  ('u-planner', 'Rekha Iyer (Planner)', 'planner@project.com', 'planner123', 'planner', NULL, 'P1'),
+  ('u-civil', 'Suresh Patel', 'civil@project.com', 'civil123', 'supervisor', 'civil', 'P1'),
+  ('u-piping', 'Alok Mehta', 'piping@project.com', 'piping123', 'supervisor', 'piping', 'P1'),
+  ('u-electrical', 'Farhan Sheikh', 'electrical@project.com', 'electrical123', 'supervisor', 'electrical', 'P1')
+ON DUPLICATE KEY UPDATE name=VALUES(name), email=VALUES(email), password=VALUES(password), role=VALUES(role), discipline=VALUES(discipline), project_id=VALUES(project_id);
 
 -- Seed Baseline WBS Activities
 -- Level 1 Project Root
-INSERT INTO activities (id, wbs_code, level, parent_id, discipline, description, planned_start, planned_end, status, source) VALUES
-  ('proj-p1', 'P1', 1, NULL, 'project', 'Refinery Debottlenecking Project', '2026-01-01', '2026-12-31', 'not_started', 'baseline_import')
-ON DUPLICATE KEY UPDATE wbs_code=VALUES(wbs_code);
+INSERT INTO activities (id, project_id, wbs_code, level, parent_id, discipline, description, planned_start, planned_end, status, source) VALUES
+  ('proj-p1', 'P1', 'P1', 1, NULL, 'project', 'Refinery Debottlenecking Project', '2026-01-01', '2026-12-31', 'not_started', 'baseline_import')
+ON DUPLICATE KEY UPDATE wbs_code=VALUES(wbs_code), project_id=VALUES(project_id);
 
 -- Level 3 Areas
 INSERT INTO activities (id, wbs_code, level, parent_id, discipline, description, planned_start, planned_end, status, source) VALUES

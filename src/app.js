@@ -17,6 +17,7 @@ const ingestRoute = require('./routes/ingest');
 const reviewRoute = require('./routes/review');
 const scheduleRoute = require('./routes/schedule');
 const dashboardRoute = require('./routes/dashboard');
+const adminRoute = require('./routes/admin');
 
 // Support both /api/* and direct routes for maximum Vercel rewrite compatibility
 app.use(['/api/auth', '/auth'], authRoute);
@@ -25,6 +26,7 @@ app.use(['/api/ingest', '/ingest'], ingestRoute);
 app.use(['/api/review', '/review'], reviewRoute);
 app.use(['/api/schedule', '/schedule'], scheduleRoute);
 app.use(['/api/dashboard', '/dashboard'], dashboardRoute);
+app.use(['/api/admin', '/admin'], adminRoute);
 
 app.get(['/health', '/api/health'], async (req, res) => {
   try {

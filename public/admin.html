@@ -1,0 +1,704 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Admin Portal — Progress Tracker</title>
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    .admin-nav-tabs {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 24px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 12px;
+      flex-wrap: wrap;
+    }
+    .admin-tab-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      border-radius: 8px;
+      padding: 8px 18px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      margin: 0;
+      box-shadow: none;
+      transition: all 0.2s ease;
+    }
+    .admin-tab-btn:hover {
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.05);
+    }
+    .admin-tab-btn.active {
+      background: rgba(59, 130, 246, 0.15);
+      color: var(--accent);
+      border-color: var(--accent);
+    }
+    .project-chip {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--border);
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      color: var(--text);
+      transition: all 0.15s;
+    }
+    .project-chip:hover, .project-chip.active {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+    .stat-kpi {
+      text-align: center;
+      padding: 16px;
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+    }
+    .stat-kpi .val {
+      font-size: 28px;
+      font-weight: 800;
+      line-height: 1.1;
+    }
+    .stat-kpi .lbl {
+      font-size: 11px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-top: 4px;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar" id="topbar"></header>
+  <main style="max-width: 1180px;">
+    <!-- Admin Header Banner -->
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px; margin-bottom: 24px;">
+      <div>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <h1 style="margin:0;">Administrator Command Console</h1>
+          <span class="badge" style="background:rgba(239,68,68,0.15); color:var(--bad); border:1px solid rgba(239,68,68,0.3); font-size:11px;">Admin Access</span>
+        </div>
+        <p class="sub" style="margin:4px 0 0 0;">Manage database users with assigned Project IDs, inspect live task status by Project ID, and upload baseline master schedules.</p>
+      </div>
+      <div id="adminNoticeBox" style="text-align:right;">
+        <span class="muted" style="font-size:12px;">Logged in as:</span>
+        <div style="font-weight:700; font-size:14px; color:var(--text);" id="adminEmailDisplay">Admin</div>
+      </div>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <div class="admin-nav-tabs">
+      <button class="admin-tab-btn active" onclick="switchTab('tasks')">📊 Project Tasks Status</button>
+      <button class="admin-tab-btn" onclick="switchTab('users')">👥 Add &amp; Manage Users</button>
+      <button class="admin-tab-btn" onclick="switchTab('schedule')">📤 Upload Schedule</button>
+    </div>
+
+    <!-- TAB 1: Project Tasks Status by Project ID -->
+    <div id="tabTasks" class="tab-content">
+      <!-- Project ID Search Bar -->
+      <div class="card" style="border-left: 4px solid var(--accent); background: linear-gradient(180deg, #131d2e 0%, #111827 100%);">
+        <label style="margin-top:0; font-size:13px; color:var(--text);">Write down Project ID to inspect all task statuses:</label>
+        <div style="display:flex; gap:10px; margin-top:8px; flex-wrap:wrap;">
+          <input type="text" id="projectSearchInput" placeholder="Enter Project ID (e.g. P1, P2)" value="P1" style="flex:2; min-width:220px; font-weight:700; text-transform:uppercase; font-size:15px;" onkeydown="if(event.key==='Enter') loadProjectTasks()" />
+          <button type="button" onclick="loadProjectTasks()" style="margin:0; padding:10px 22px;">🔍 View Tasks Status</button>
+          <button type="button" class="secondary" onclick="loadKnownProjects()" style="margin:0; padding:10px 14px;" title="Refresh list of known projects">🔄 Refresh</button>
+        </div>
+
+        <!-- Discovered Projects Quick Selector Chips -->
+        <div style="display:flex; align-items:center; gap:8px; margin-top:14px; flex-wrap:wrap;">
+          <span class="muted" style="font-size:12px;">Quick Select Detected Projects:</span>
+          <div id="projectChips" style="display:flex; gap:6px; flex-wrap:wrap;">
+            <span class="project-chip active" onclick="selectProjectChip('P1')">P1</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live Project Overview Stats Container -->
+      <div id="projectStatsContainer" style="display:none; margin-bottom:20px;">
+        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:12px; margin-bottom:14px;">
+          <div class="stat-kpi">
+            <div class="val" style="color:var(--text);" id="statTotal">0</div>
+            <div class="lbl">Total Activities</div>
+          </div>
+          <div class="stat-kpi">
+            <div class="val" style="color:var(--good);" id="statCompleted">0</div>
+            <div class="lbl">Completed Tasks</div>
+          </div>
+          <div class="stat-kpi">
+            <div class="val" style="color:var(--warn);" id="statInProgress">0</div>
+            <div class="lbl">In Progress</div>
+          </div>
+          <div class="stat-kpi">
+            <div class="val" style="color:var(--muted);" id="statNotStarted">0</div>
+            <div class="lbl">Not Started</div>
+          </div>
+          <div class="stat-kpi">
+            <div class="val" style="color:var(--flagged);" id="statPending">0</div>
+            <div class="lbl">Pending Review</div>
+          </div>
+        </div>
+
+        <!-- Overall Progress Bar Card -->
+        <div class="card" style="padding:14px 18px; margin-bottom:16px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <div>
+              <b id="projectTitleHeader" style="font-size:16px;">Project P1 Execution Progress</b>
+              <span id="supervisorsBadge" class="badge" style="background:rgba(59,130,246,0.15); color:var(--accent); margin-left:8px;">0 Supervisors Assigned</span>
+            </div>
+            <div>
+              <span class="muted" style="font-size:13px;">Completion: </span>
+              <b style="color:var(--good); font-size:16px;" id="progressPctText">0%</b>
+            </div>
+          </div>
+          <div class="score-bar" style="height:8px;">
+            <div class="score-fill" id="progressPctFill" style="width:0%; background:var(--good);"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Filters & Tasks Table Container -->
+      <div class="card" id="tasksTableCard" style="display:none;">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:14px;">
+          <b style="font-size:16px;">All Project Tasks &amp; Milestones</b>
+
+          <!-- Filters -->
+          <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+            <input type="text" id="taskSearchFilter" placeholder="Filter tasks by description or WBS..." oninput="renderTasksTable()" style="width:240px; padding:6px 12px; font-size:13px;" />
+            <select id="taskStatusFilter" onchange="renderTasksTable()" style="width:auto; padding:6px 10px; font-size:13px;">
+              <option value="">All Statuses</option>
+              <option value="completed">Completed</option>
+              <option value="in_progress">In Progress</option>
+              <option value="not_started">Not Started</option>
+            </select>
+            <select id="taskDisciplineFilter" onchange="renderTasksTable()" style="width:auto; padding:6px 10px; font-size:13px;">
+              <option value="">All Disciplines</option>
+              <option value="civil">Civil</option>
+              <option value="piping">Piping</option>
+              <option value="electrical">Electrical</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Table -->
+        <div style="overflow-x:auto;">
+          <table>
+            <thead>
+              <tr>
+                <th>WBS</th>
+                <th>Discipline</th>
+                <th>Task / Activity Description</th>
+                <th>Planned Window</th>
+                <th>Actual Window</th>
+                <th>Status</th>
+                <th>Field Logs</th>
+              </tr>
+            </thead>
+            <tbody id="tasksTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Empty State / Prompt -->
+      <div id="noTasksCard" class="card" style="display:none; text-align:center; padding:40px;">
+        <div style="font-size:36px; margin-bottom:10px;">📋</div>
+        <b style="font-size:16px; color:var(--text);" id="noTasksTitle">No tasks found for Project ID</b>
+        <p class="muted" style="max-width:500px; margin:8px auto 18px; font-size:13px;">You can upload a master baseline schedule for this Project ID or generate a default multi-discipline baseline.</p>
+        <div style="display:flex; justify-content:center; gap:12px; flex-wrap:wrap;">
+          <button type="button" onclick="goToUploadForCurrentProject()">📤 Upload Schedule for this Project</button>
+          <button type="button" class="secondary" onclick="seedDefaultForCurrentProject()">⚡ Seed Default Baseline</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 2: Add Users into Database -->
+    <div id="tabUsers" class="tab-content" style="display:none;">
+      <div style="display:grid; grid-template-columns: 1fr 1.6fr; gap:20px; align-items:flex-start;">
+        <!-- Add User Form -->
+        <div class="card" style="border-left: 4px solid var(--good);">
+          <b style="font-size:17px; display:block; margin-bottom:4px;">Add User into Database</b>
+          <p class="sub" style="font-size:13px; margin-bottom:18px;">Register supervisors or team members by their <b>Email</b>, <b>Password</b>, and assigned <b>Project ID</b>.</p>
+
+          <div id="addUserMsg" style="display:none; padding:10px 14px; border-radius:8px; font-size:13px; margin-bottom:14px;"></div>
+
+          <form id="addUserForm" onsubmit="handleAddUser(event)">
+            <label for="newUserEmail">Email Address *</label>
+            <input type="email" id="newUserEmail" placeholder="e.g. site.civil@project.com" required style="margin-bottom:10px;" />
+
+            <label for="newUserPassword">Password *</label>
+            <input type="text" id="newUserPassword" placeholder="e.g. secure123" required style="margin-bottom:10px;" />
+
+            <label for="newUserProjectId">Assigned Project ID *</label>
+            <input type="text" id="newUserProjectId" placeholder="e.g. P1, P2" value="P1" required style="margin-bottom:10px; font-weight:700; text-transform:uppercase;" />
+            <p class="sub" style="font-size:11px; margin-top:-6px; margin-bottom:10px; color:var(--warn);">The supervisor will enter this Project ID when logging in.</p>
+
+            <label for="newUserName">Full Name / Display Name</label>
+            <input type="text" id="newUserName" placeholder="e.g. Anil Sharma" style="margin-bottom:10px;" />
+
+            <div class="row" style="gap:10px; margin-bottom:10px;">
+              <div>
+                <label for="newUserRole">User Role</label>
+                <select id="newUserRole" onchange="onNewUserRoleChange()">
+                  <option value="supervisor" selected>Supervisor</option>
+                  <option value="planner">Project Planner</option>
+                  <option value="admin">Administrator</option>
+                </select>
+              </div>
+              <div id="newDisciplineBox">
+                <label for="newUserDiscipline">Discipline</label>
+                <select id="newUserDiscipline">
+                  <option value="civil">Civil</option>
+                  <option value="piping">Piping</option>
+                  <option value="electrical">Electrical</option>
+                  <option value="mechanical">Mechanical</option>
+                  <option value="general">General</option>
+                </select>
+              </div>
+            </div>
+
+            <button type="submit" style="width:100%; margin-top:14px;">➕ Add User to Database</button>
+          </form>
+        </div>
+
+        <!-- Users Directory Table -->
+        <div class="card">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+            <div>
+              <b style="font-size:16px;">Registered Database Users</b>
+              <p class="sub" style="margin:2px 0 0 0; font-size:12px;">All accounts with verified database access and assigned Project IDs.</p>
+            </div>
+            <button class="secondary" onclick="loadUsersList()" style="margin:0; padding:6px 12px; font-size:12px;">🔄 Refresh</button>
+          </div>
+
+          <div style="overflow-x:auto;">
+            <table>
+              <thead>
+                <tr>
+                  <th>Name &amp; Email</th>
+                  <th>Role</th>
+                  <th>Discipline</th>
+                  <th>Project ID</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="usersTableBody">
+                <tr><td colspan="5" class="muted" style="text-align:center;">Loading database users...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 3: Upload Schedule -->
+    <div id="tabSchedule" class="tab-content" style="display:none;">
+      <div class="card" style="border-left: 4px solid var(--accent); background: linear-gradient(180deg, #131d2e 0%, #111827 100%);">
+        <b style="font-size:18px; display:block; margin-bottom:4px;">Upload Master Schedule &amp; Baseline Import</b>
+        <p class="sub" style="font-size:13px; margin-bottom:18px;">Upload a master project baseline schedule file (.xlsx / .csv). Activities are parsed and attached to the target Project ID in the MySQL database.</p>
+
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px; align-items:flex-start;">
+          <!-- Upload Form -->
+          <div style="background:rgba(0,0,0,0.25); border:1px solid var(--border); border-radius:10px; padding:18px;">
+            <b style="font-size:14px; display:block; margin-bottom:10px;">Select File to Import</b>
+
+            <label for="scheduleTargetProjectId">Target Project ID *</label>
+            <input type="text" id="scheduleTargetProjectId" value="P1" required style="margin-bottom:14px; font-weight:700; text-transform:uppercase;" />
+
+            <label for="scheduleFileInput">Spreadsheet File (.xlsx, .csv) *</label>
+            <input type="file" id="scheduleFileInput" accept=".xlsx,.csv,.xls" style="margin-bottom:18px;" />
+
+            <div id="uploadResultBox" style="display:none; padding:10px 14px; border-radius:8px; font-size:13px; margin-bottom:14px;"></div>
+
+            <button type="button" id="uploadScheduleBtn" onclick="handleScheduleUpload()" style="width:100%;">
+              📤 Upload &amp; Publish Schedule
+            </button>
+          </div>
+
+          <!-- Template & Quick Reset Tools -->
+          <div style="background:rgba(0,0,0,0.25); border:1px solid var(--border); border-radius:10px; padding:18px;">
+            <b style="font-size:14px; display:block; margin-bottom:8px;">Tools &amp; Baseline Templates</b>
+            <p class="sub" style="font-size:12px; margin-bottom:16px;">Download a pre-formatted schedule template with columns <code>Project ID, WBS Code, Level, Parent WBS, Discipline, Description, Planned Start, Planned End</code>.</p>
+
+            <button type="button" class="secondary" onclick="downloadMasterTemplate()" style="width:100%; margin-top:0; margin-bottom:12px; text-align:left; padding:10px 14px;">
+              📥 Download Sample Schedule Template CSV
+            </button>
+
+            <div style="border-top:1px solid var(--border); padding-top:14px; margin-top:14px;">
+              <b style="font-size:13px; display:block; margin-bottom:4px;">Quick Seed Default Baseline</b>
+              <p class="sub" style="font-size:12px; margin-bottom:10px;">Instantly generate a full 3-discipline baseline (Civil, Piping, Electrical) for the target Project ID.</p>
+              <button type="button" class="secondary" onclick="seedDefaultFromTab()" style="width:100%; margin:0; padding:8px 14px;">
+                ⚡ Generate Default Baseline for Target Project
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="app.js?v=2.3"></script>
+  <script>
+    let currentProjectData = { project_id: '', summary: {}, tasks: [], recent_events: [] };
+    let knownProjectIds = ['P1'];
+
+    (async () => {
+      await renderTopbar('admin.html');
+      const user = State.user;
+      if (!user || user.role !== 'admin') {
+        location.href = 'index.html';
+        return;
+      }
+      document.getElementById('adminEmailDisplay').textContent = `${user.name} (${user.email})`;
+      loadKnownProjects();
+      loadProjectTasks('P1');
+      loadUsersList();
+    })();
+
+    function switchTab(tab) {
+      document.querySelectorAll('.admin-tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
+
+      if (tab === 'tasks') {
+        document.querySelector('.admin-tab-btn:nth-child(1)').classList.add('active');
+        document.getElementById('tabTasks').style.display = '';
+      } else if (tab === 'users') {
+        document.querySelector('.admin-tab-btn:nth-child(2)').classList.add('active');
+        document.getElementById('tabUsers').style.display = '';
+        loadUsersList();
+      } else if (tab === 'schedule') {
+        document.querySelector('.admin-tab-btn:nth-child(3)').classList.add('active');
+        document.getElementById('tabSchedule').style.display = '';
+      }
+    }
+
+    /* =========================================================================
+       PROJECT TASKS STATUS LOOKUP
+       ========================================================================= */
+    async function loadKnownProjects() {
+      try {
+        const list = await api('/admin/projects');
+        if (Array.isArray(list) && list.length) {
+          knownProjectIds = list;
+          renderProjectChips();
+        }
+      } catch (_) {}
+    }
+
+    function renderProjectChips() {
+      const currentInput = document.getElementById('projectSearchInput').value.trim().toUpperCase();
+      const container = document.getElementById('projectChips');
+      container.innerHTML = knownProjectIds.map(p => `
+        <span class="project-chip ${p.toUpperCase() === currentInput ? 'active' : ''}" onclick="selectProjectChip('${escapeHtml(p)}')">
+          ${escapeHtml(p)}
+        </span>
+      `).join('');
+    }
+
+    function selectProjectChip(p) {
+      document.getElementById('projectSearchInput').value = p;
+      document.getElementById('scheduleTargetProjectId').value = p;
+      document.getElementById('newUserProjectId').value = p;
+      renderProjectChips();
+      loadProjectTasks(p);
+    }
+
+    async function loadProjectTasks(explicitProjId) {
+      const projId = (explicitProjId || document.getElementById('projectSearchInput').value || '').trim().toUpperCase();
+      if (!projId) return toast('Please write down a Project ID');
+
+      document.getElementById('scheduleTargetProjectId').value = projId;
+      document.getElementById('newUserProjectId').value = projId;
+      renderProjectChips();
+
+      try {
+        const data = await api(`/admin/projects/${encodeURIComponent(projId)}/tasks`);
+        currentProjectData = data;
+        renderProjectView();
+      } catch (err) {
+        toast(`Error loading Project ${projId}: ${err.message}`);
+      }
+    }
+
+    function renderProjectView() {
+      const data = currentProjectData;
+      const statsBox = document.getElementById('projectStatsContainer');
+      const tableCard = document.getElementById('tasksTableCard');
+      const noTasksCard = document.getElementById('noTasksCard');
+
+      if (!data.tasks || !data.tasks.length) {
+        statsBox.style.display = 'none';
+        tableCard.style.display = 'none';
+        noTasksCard.style.display = '';
+        document.getElementById('noTasksTitle').textContent = `No tasks found for Project ID "${data.project_id}"`;
+        return;
+      }
+
+      noTasksCard.style.display = 'none';
+      statsBox.style.display = '';
+      tableCard.style.display = '';
+
+      const s = data.summary;
+      document.getElementById('statTotal').textContent = s.total_tasks;
+      document.getElementById('statCompleted').textContent = s.completed;
+      document.getElementById('statInProgress').textContent = s.in_progress;
+      document.getElementById('statNotStarted').textContent = s.not_started;
+      document.getElementById('statPending').textContent = s.pending_approvals;
+
+      document.getElementById('projectTitleHeader').textContent = `Project ${data.project_id} Execution Baseline & Status`;
+      document.getElementById('supervisorsBadge').textContent = `${s.assigned_supervisors_count || 0} Supervisors Assigned`;
+      document.getElementById('progressPctText').textContent = `${s.progress_pct}% (${s.completed}/${s.executable_tasks} leaf tasks)`;
+      document.getElementById('progressPctFill').style.width = `${s.progress_pct}%`;
+
+      renderTasksTable();
+    }
+
+    function renderTasksTable() {
+      const tasks = currentProjectData.tasks || [];
+      const search = (document.getElementById('taskSearchFilter').value || '').trim().toLowerCase();
+      const statusFilter = document.getElementById('taskStatusFilter').value;
+      const discFilter = document.getElementById('taskDisciplineFilter').value;
+      const tbody = document.getElementById('tasksTableBody');
+
+      let filtered = tasks;
+      if (search) {
+        filtered = filtered.filter(t => 
+          (t.wbs_code && t.wbs_code.toLowerCase().includes(search)) ||
+          (t.description && t.description.toLowerCase().includes(search))
+        );
+      }
+      if (statusFilter) {
+        filtered = filtered.filter(t => t.status === statusFilter);
+      }
+      if (discFilter) {
+        filtered = filtered.filter(t => t.discipline && t.discipline.toLowerCase() === discFilter.toLowerCase());
+      }
+
+      if (!filtered.length) {
+        tbody.innerHTML = `<tr><td colspan="7" class="muted" style="text-align:center; padding:24px;">No tasks match the filter criteria.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = filtered.map(t => {
+        const statusBadge = t.status === 'completed'
+          ? '<span class="badge completed">Completed</span>'
+          : t.status === 'in_progress'
+          ? '<span class="badge in_progress">In Progress</span>'
+          : '<span class="badge not_started">Not Started</span>';
+
+        const pendingBadge = (Number(t.pending_count) > 0)
+          ? `<span class="badge pending" style="margin-left:4px;">⚡ ${t.pending_count} pending</span>`
+          : '';
+
+        const indent = (t.level === 1) ? 'font-weight:700; color:var(--text);' : (t.level === 3) ? 'padding-left:14px; font-weight:600;' : 'padding-left:26px;';
+
+        return `
+          <tr>
+            <td style="font-family:monospace; font-weight:700; color:var(--accent);">${escapeHtml(t.wbs_code)}</td>
+            <td><span class="badge" style="background:rgba(255,255,255,0.06); color:var(--muted); font-size:10px;">${escapeHtml(t.discipline)}</span></td>
+            <td style="${indent}">
+              <a href="activity.html?id=${t.id}" style="color:inherit; text-decoration:none; hover:underline;">
+                ${escapeHtml(t.description)}
+              </a>
+            </td>
+            <td class="muted" style="font-size:12px;">${t.planned_start ? escapeHtml(t.planned_start) : '—'} &rarr; ${t.planned_end ? escapeHtml(t.planned_end) : '—'}</td>
+            <td class="muted" style="font-size:12px;">${t.actual_start ? escapeHtml(t.actual_start) : '—'} &rarr; ${t.actual_end ? escapeHtml(t.actual_end) : '—'}</td>
+            <td>${statusBadge} ${pendingBadge}</td>
+            <td style="font-size:12px; color:var(--muted);">${t.match_count || 0} logs</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function goToUploadForCurrentProject() {
+      const proj = (currentProjectData.project_id || 'P1').toUpperCase();
+      document.getElementById('scheduleTargetProjectId').value = proj;
+      switchTab('schedule');
+    }
+
+    async function seedDefaultForCurrentProject() {
+      const proj = (currentProjectData.project_id || 'P1').toUpperCase();
+      if (!confirm(`Generate standard multi-discipline baseline activities for Project ${proj}?`)) return;
+      try {
+        const res = await api(`/admin/projects/${encodeURIComponent(proj)}/seed-default`, { method: 'POST' });
+        toast(res.message);
+        loadKnownProjects();
+        loadProjectTasks(proj);
+      } catch (e) { toast(e.message); }
+    }
+
+    /* =========================================================================
+       USER MANAGEMENT
+       ========================================================================= */
+    function onNewUserRoleChange() {
+      const role = document.getElementById('newUserRole').value;
+      const discBox = document.getElementById('newDisciplineBox');
+      discBox.style.display = (role === 'supervisor') ? '' : 'none';
+    }
+
+    async function loadUsersList() {
+      const tbody = document.getElementById('usersTableBody');
+      try {
+        const users = await api('/admin/users');
+        if (!users.length) {
+          tbody.innerHTML = '<tr><td colspan="5" class="muted">No users found.</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = users.map(u => `
+          <tr>
+            <td>
+              <b style="color:var(--text);">${escapeHtml(u.name)}</b>
+              <div class="muted" style="font-size:12px; font-family:monospace;">${escapeHtml(u.email)}</div>
+            </td>
+            <td>
+              <span class="badge" style="background:${u.role==='admin'?'rgba(239,68,68,0.15)':u.role==='supervisor'?'rgba(59,130,246,0.15)':'rgba(16,185,129,0.15)'}; color:${u.role==='admin'?'var(--bad)':u.role==='supervisor'?'var(--accent)':'var(--good)'};">
+                ${escapeHtml(u.role)}
+              </span>
+            </td>
+            <td>
+              <span class="muted" style="font-size:12px;">${escapeHtml(u.discipline || '—')}</span>
+            </td>
+            <td>
+              <span class="badge" style="background:rgba(245,158,11,0.15); color:var(--warn); font-weight:700; font-size:12px;">
+                ${escapeHtml(u.project_id || 'P1')}
+              </span>
+            </td>
+            <td>
+              ${State.user && State.user.id === u.id 
+                ? '<span class="muted" style="font-size:11px;">Current Admin</span>'
+                : `<button type="button" class="secondary" onclick="deleteUserRow('${u.id}', '${escapeHtml(u.name)}')" style="padding:4px 8px; font-size:11px; margin:0; border-color:var(--bad); color:var(--bad);">Delete</button>`
+              }
+            </td>
+          </tr>
+        `).join('');
+      } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="5" class="muted" style="color:var(--bad)">Error: ${escapeHtml(err.message)}</td></tr>`;
+      }
+    }
+
+    async function handleAddUser(e) {
+      e.preventDefault();
+      const email = document.getElementById('newUserEmail').value.trim();
+      const password = document.getElementById('newUserPassword').value.trim();
+      const project_id = document.getElementById('newUserProjectId').value.trim().toUpperCase();
+      const name = document.getElementById('newUserName').value.trim();
+      const role = document.getElementById('newUserRole').value;
+      const discipline = (role === 'supervisor') ? document.getElementById('newUserDiscipline').value : null;
+
+      const msgBox = document.getElementById('addUserMsg');
+      msgBox.style.display = 'none';
+
+      try {
+        const res = await api('/admin/users', {
+          method: 'POST',
+          body: JSON.stringify({ email, password, project_id, name, role, discipline })
+        });
+
+        msgBox.style.display = '';
+        msgBox.style.background = 'rgba(16, 185, 129, 0.15)';
+        msgBox.style.border = '1px solid rgba(16, 185, 129, 0.3)';
+        msgBox.style.color = 'var(--good)';
+        msgBox.textContent = `✅ User ${res.user.name} added to Project ${res.user.project_id} successfully!`;
+
+        toast(`User added to Project ${res.user.project_id}`);
+        document.getElementById('addUserForm').reset();
+        document.getElementById('newUserProjectId').value = project_id;
+        loadUsersList();
+        loadKnownProjects();
+      } catch (err) {
+        msgBox.style.display = '';
+        msgBox.style.background = 'rgba(239, 68, 68, 0.15)';
+        msgBox.style.border = '1px solid rgba(239, 68, 68, 0.3)';
+        msgBox.style.color = 'var(--bad)';
+        msgBox.textContent = `❌ ${err.message}`;
+      }
+    }
+
+    async function deleteUserRow(id, name) {
+      if (!confirm(`Are you sure you want to remove user "${name}" from the database?`)) return;
+      try {
+        await api(`/admin/users/${id}`, { method: 'DELETE' });
+        toast(`User ${name} removed.`);
+        loadUsersList();
+      } catch (err) {
+        toast(err.message);
+      }
+    }
+
+    /* =========================================================================
+       SCHEDULE UPLOAD
+       ========================================================================= */
+    function downloadMasterTemplate() {
+      const baseUrl = typeof getApiBaseUrl === 'function' ? getApiBaseUrl() : '';
+      window.open(baseUrl + '/api/schedule/template', '_blank');
+    }
+
+    async function handleScheduleUpload() {
+      const file = document.getElementById('scheduleFileInput').files[0];
+      const targetProjId = (document.getElementById('scheduleTargetProjectId').value || 'P1').trim().toUpperCase();
+      const resBox = document.getElementById('uploadResultBox');
+      resBox.style.display = 'none';
+
+      if (!file) return toast('Please select a spreadsheet file (.xlsx / .csv)');
+      if (!targetProjId) return toast('Please specify a Project ID for the schedule');
+
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('project_id', targetProjId);
+
+      const btn = document.getElementById('uploadScheduleBtn');
+      btn.disabled = true;
+      btn.textContent = 'Uploading & Processing...';
+
+      try {
+        const res = await api(`/admin/projects/${encodeURIComponent(targetProjId)}/schedule`, {
+          method: 'POST',
+          body: fd
+        });
+
+        resBox.style.display = '';
+        resBox.style.background = 'rgba(16, 185, 129, 0.15)';
+        resBox.style.border = '1px solid rgba(16, 185, 129, 0.3)';
+        resBox.style.color = 'var(--good)';
+        resBox.innerHTML = `✅ <b>Schedule Published for Project ${targetProjId}!</b><br/>Rows processed: ${res.rows_processed} · Created: ${res.activities_created} · Updated: ${res.activities_updated}`;
+
+        toast(`Schedule uploaded: ${res.activities_created} created, ${res.activities_updated} updated`);
+        loadKnownProjects();
+        document.getElementById('scheduleFileInput').value = '';
+        setTimeout(() => {
+          switchTab('tasks');
+          loadProjectTasks(targetProjId);
+        }, 800);
+      } catch (err) {
+        resBox.style.display = '';
+        resBox.style.background = 'rgba(239, 68, 68, 0.15)';
+        resBox.style.border = '1px solid rgba(239, 68, 68, 0.3)';
+        resBox.style.color = 'var(--bad)';
+        resBox.innerHTML = `❌ <b>Upload failed:</b> ${escapeHtml(err.message)}`;
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '📤 Upload & Publish Schedule';
+      }
+    }
+
+    async function seedDefaultFromTab() {
+      const targetProjId = (document.getElementById('scheduleTargetProjectId').value || 'P1').trim().toUpperCase();
+      if (!confirm(`Seed default multi-discipline baseline for Project ${targetProjId}?`)) return;
+      try {
+        const res = await api(`/admin/projects/${encodeURIComponent(targetProjId)}/seed-default`, { method: 'POST' });
+        toast(res.message);
+        loadKnownProjects();
+        switchTab('tasks');
+        loadProjectTasks(targetProjId);
+      } catch (e) {
+        toast(e.message);
+      }
+    }
+  </script>
+</body>
+</html>

@@ -84,16 +84,20 @@ function getPool() {
         password VARCHAR(255) DEFAULT 'password123',
         role VARCHAR(50) NOT NULL,
         discipline VARCHAR(50) DEFAULT NULL,
+        project_id VARCHAR(64) DEFAULT 'P1',
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
 
     try { await conn.query(`ALTER TABLE users ADD COLUMN email VARCHAR(255) UNIQUE DEFAULT NULL`); } catch (_) {}
     try { await conn.query(`ALTER TABLE users ADD COLUMN password VARCHAR(255) DEFAULT 'password123'`); } catch (_) {}
+    try { await conn.query(`ALTER TABLE users ADD COLUMN project_id VARCHAR(64) DEFAULT 'P1'`); } catch (_) {}
+    try { await conn.query(`UPDATE users SET project_id = 'P1' WHERE project_id IS NULL OR project_id = ''`); } catch (_) {}
 
     await conn.query(`
       CREATE TABLE IF NOT EXISTS activities (
         id VARCHAR(64) PRIMARY KEY,
+        project_id VARCHAR(64) DEFAULT 'P1',
         wbs_code VARCHAR(100) DEFAULT NULL,
         level INT NOT NULL,
         parent_id VARCHAR(64) DEFAULT NULL,
@@ -108,6 +112,9 @@ function getPool() {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
+
+    try { await conn.query(`ALTER TABLE activities ADD COLUMN project_id VARCHAR(64) DEFAULT 'P1'`); } catch (_) {}
+    try { await conn.query(`UPDATE activities SET project_id = 'P1' WHERE project_id IS NULL OR project_id = ''`); } catch (_) {}
 
     await conn.query(`
       CREATE TABLE IF NOT EXISTS raw_entries (

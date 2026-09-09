@@ -3,14 +3,21 @@ const XLSX = require('xlsx');
 const db = require('../config/db');
 
 async function listActivities(req, res, next) {
-  const { discipline } = req.query;
+  const { discipline, project_id } = req.query;
+  const effectiveProjectId = project_id || (req.user && req.user.role === 'supervisor' ? req.user.project_id : null);
   try {
-    let rows;
-    if (discipline) {
-      [rows] = await db.query('SELECT * FROM activities WHERE LOWER(discipline) = LOWER(?) OR level < 3 ORDER BY wbs_code', [discipline]);
-    } else {
-      [rows] = await db.query('SELECT * FROM activities ORDER BY wbs_code');
+    let query = 'SELECT * FROM activities WHERE 1=1';
+    const params = [];
+    if (effectiveProjectId) {
+      query += ' AND (UPPER(project_id) = UPPER(?) OR (project_id IS NULL AND UPPER(wbs_code) LIKE CONCAT(?, "%")))';
+      params.push(effectiveProjectId, effectiveProjectId);
     }
+    if (discipline) {
+      query += ' AND (LOWER(discipline) = LOWER(?) OR level < 3)';
+      params.push(discipline);
+    }
+    query += ' ORDER BY wbs_code';
+    const [rows] = await db.query(query, params);
     res.json(rows);
   } catch (err) {
     next(err);
@@ -42,20 +49,20 @@ async function getActivity(req, res, next) {
 }
 
 async function downloadTemplate(req, res) {
-  const csvContent = `WBS Code,Level,Parent WBS,Discipline,Description,Planned Start,Planned End
-P1,1,,project,Refinery Debottlenecking Master Schedule,2026-01-01,2026-12-31
-P1.CIV,3,P1,civil,Civil - Main Civil & Substructure Foundations,2026-01-15,2026-04-30
-P1.CIV.001,5,P1.CIV,civil,Excavation for Foundation F-12,2026-01-20,2026-01-25
-P1.CIV.002,5,P1.CIV,civil,Rebar Fixing Foundation F-12,2026-01-26,2026-01-30
-P1.CIV.003,5,P1.CIV,civil,Concrete Pour Foundation F-12,2026-02-01,2026-02-03
-P1.PIP,3,P1,piping,Piping - Unit 24 Process Lines & Headers,2026-02-01,2026-06-30
-P1.PIP.001,5,P1.PIP,piping,Erect Line 24"-XX Header Spools,2026-03-10,2026-03-14
-P1.PIP.002,5,P1.PIP,piping,Weld Line 24"-XX Joints 3 to 7,2026-03-15,2026-03-18
-P1.PIP.003,5,P1.PIP,piping,Hydro Test Line 24"-XX,2026-03-19,2026-03-21
-P1.ELE,3,P1,electrical,Electrical - Substation 3 Cabling & Panels,2026-03-01,2026-07-31
-P1.ELE.001,5,P1.ELE,electrical,Cable Laying Substation 3 Panel A,2026-04-01,2026-04-05
-P1.ELE.002,5,P1.ELE,electrical,Cable Termination Substation 3 Panel A,2026-04-06,2026-04-08
-P1.ELE.003,5,P1.ELE,electrical,Megger Testing Substation 3 Panel A,2026-04-09,2026-04-10`;
+  const csvContent = `Project ID,WBS Code,Level,Parent WBS,Discipline,Description,Planned Start,Planned End
+P1,P1,1,,project,Refinery Debottlenecking Master Schedule,2026-01-01,2026-12-31
+P1,P1.CIV,3,P1,civil,Civil - Main Civil & Substructure Foundations,2026-01-15,2026-04-30
+P1,P1.CIV.001,5,P1.CIV,civil,Excavation for Foundation F-12,2026-01-20,2026-01-25
+P1,P1.CIV.002,5,P1.CIV,civil,Rebar Fixing Foundation F-12,2026-01-26,2026-01-30
+P1,P1.CIV.003,5,P1.CIV,civil,Concrete Pour Foundation F-12,2026-02-01,2026-02-03
+P1,P1.PIP,3,P1,piping,Piping - Unit 24 Process Lines & Headers,2026-02-01,2026-06-30
+P1,P1.PIP.001,5,P1.PIP,piping,Erect Line 24"-XX Header Spools,2026-03-10,2026-03-14
+P1,P1.PIP.002,5,P1.PIP,piping,Weld Line 24"-XX Joints 3 to 7,2026-03-15,2026-03-18
+P1,P1.PIP.003,5,P1.PIP,piping,Hydro Test Line 24"-XX,2026-03-19,2026-03-21
+P1,P1.ELE,3,P1,electrical,Electrical - Substation 3 Cabling & Panels,2026-03-01,2026-07-31
+P1,P1.ELE.001,5,P1.ELE,electrical,Cable Laying Substation 3 Panel A,2026-04-01,2026-04-05
+P1,P1.ELE.002,5,P1.ELE,electrical,Cable Termination Substation 3 Panel A,2026-04-06,2026-04-08
+P1,P1.ELE.003,5,P1.ELE,electrical,Megger Testing Substation 3 Panel A,2026-04-09,2026-04-10`;
 
   res.setHeader('Content-Type', 'text/csv');
   res.setHeader('Content-Disposition', 'attachment; filename="master_schedule_template.csv"');
@@ -93,23 +100,24 @@ async function importBaseline(req, res, next) {
         const description = String(row['Description'] || row['description'] || row['Task'] || row['Activity'] || '').trim();
         const plannedStart = row['Planned Start'] || row['planned_start'] || row['Start'] || null;
         const plannedEnd = row['Planned End'] || row['planned_end'] || row['Finish'] || row['End'] || null;
+        const projectId = String(row['Project ID'] || row['project_id'] || row['Project'] || req.body.project_id || 'P1').trim().toUpperCase();
 
         const parentId = parentWbs && wbsToId[parentWbs] ? wbsToId[parentWbs] : null;
 
         if (wbsToId[wbs]) {
           await connection.query(
             `UPDATE activities
-             SET level=?, parent_id=?, discipline=?, description=?, planned_start=?, planned_end=?, source='master_schedule_import'
+             SET level=?, parent_id=?, discipline=?, description=?, planned_start=?, planned_end=?, source='master_schedule_import', project_id=?
              WHERE wbs_code=?`,
-            [level, parentId, discipline, description, plannedStart || null, plannedEnd || null, wbs]
+            [level, parentId, discipline, description, plannedStart || null, plannedEnd || null, projectId, wbs]
           );
           updated++;
         } else {
           const id = uuid();
           await connection.query(
-            `INSERT INTO activities (id, wbs_code, level, parent_id, discipline, description, planned_start, planned_end, status, source)
-             VALUES (?,?,?,?,?,?,?,?,'not_started','master_schedule_import')`,
-            [id, wbs, level, parentId, discipline, description, plannedStart || null, plannedEnd || null]
+            `INSERT INTO activities (id, project_id, wbs_code, level, parent_id, discipline, description, planned_start, planned_end, status, source)
+             VALUES (?,?,?,?,?,?,?,?,?,'not_started','master_schedule_import')`,
+            [id, projectId, wbs, level, parentId, discipline, description, plannedStart || null, plannedEnd || null]
           );
           wbsToId[wbs] = id;
           created++;

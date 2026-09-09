@@ -68,7 +68,7 @@
         fileDiscSelect.value = user.discipline;
         fileDiscSelect.disabled = true;
 
-        const lockNotice = `<span class="badge" style="background:rgba(234,179,8,0.15); color:var(--warn); margin-left:8px; font-size:11px;">🔒 Locked to ${user.discipline.toUpperCase()} Supervisor</span>`;
+        const lockNotice = `<span class="badge" style="background:rgba(234,179,8,0.15); color:var(--warn); margin-left:8px; font-size:11px;">🔒 Locked to ${user.discipline.toUpperCase()} Supervisor (Project: ${escapeHtml(user.project_id || 'P1')})</span>`;
         if (discSelect.previousElementSibling) discSelect.previousElementSibling.innerHTML += lockNotice;
         if (fileDiscSelect.previousElementSibling) fileDiscSelect.previousElementSibling.innerHTML += lockNotice;
       }

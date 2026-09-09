@@ -25,13 +25,16 @@ CREATE TABLE users (
   password VARCHAR(255) NOT NULL DEFAULT 'password123',
   role ENUM('admin', 'planner', 'supervisor') NOT NULL,
   discipline VARCHAR(50) DEFAULT NULL,
+  project_id VARCHAR(64) DEFAULT 'P1',
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  INDEX idx_users_email (email)
+  INDEX idx_users_email (email),
+  INDEX idx_users_project (project_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 2. Activities (Baseline WBS) Table
 CREATE TABLE activities (
   id VARCHAR(64) NOT NULL PRIMARY KEY,
+  project_id VARCHAR(64) DEFAULT 'P1',
   wbs_code VARCHAR(100) DEFAULT NULL,
   level INT NOT NULL,
   parent_id VARCHAR(64) DEFAULT NULL,
@@ -45,6 +48,7 @@ CREATE TABLE activities (
   source VARCHAR(50) DEFAULT 'baseline_import',
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (parent_id) REFERENCES activities(id) ON DELETE SET NULL ON UPDATE CASCADE,
+  INDEX idx_activities_project (project_id),
   INDEX idx_activities_discipline (discipline),
   INDEX idx_activities_parent (parent_id),
   INDEX idx_activities_wbs (wbs_code)

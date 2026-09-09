@@ -64,11 +64,27 @@ async function renderTopbar(activePage) {
     return;
   }
 
+  // Redirect admin away from supervisor pages to dedicated admin portal
+  if (user && user.role === 'admin' && ['log.html', 'approval.html', 'dashboard.html'].includes(activePage)) {
+    location.href = 'admin.html';
+    return;
+  }
+
+  // Redirect non-admins away from admin portal
+  if (user && user.role !== 'admin' && activePage === 'admin.html') {
+    location.href = 'approval.html';
+    return;
+  }
+
   const links = [
-    { href: 'log.html', label: 'Log Progress', roles: ['supervisor', 'planner', 'admin'] },
-    { href: 'approval.html', label: 'Task Approval', roles: ['supervisor', 'planner', 'admin'] },
-    { href: 'schedule.html', label: 'Schedule Baseline', roles: ['supervisor', 'planner', 'admin'] },
-    { href: 'dashboard.html', label: 'Dashboard', roles: ['supervisor', 'planner', 'admin'] },
+    // Admin navigation
+    { href: 'admin.html', label: 'Admin Portal', roles: ['admin'] },
+
+    // Supervisor & Planner navigation
+    { href: 'approval.html', label: 'Task Approval', roles: ['supervisor', 'planner'] },
+    { href: 'log.html', label: 'Log Progress', roles: ['supervisor'] },
+    { href: 'schedule.html', label: 'Schedule Baseline', roles: ['supervisor', 'planner'] },
+    { href: 'dashboard.html', label: 'Dashboard', roles: ['supervisor', 'planner'] },
   ];
 
   const nav = user
@@ -80,7 +96,12 @@ async function renderTopbar(activePage) {
 
   const userBoxHtml = user
     ? `<div class="userbox">
-        <span>Logged in as <b>${escapeHtml(user.name)}</b> <span class="badge" style="background:rgba(59,130,246,0.15); color:var(--accent); font-size:10px">${escapeHtml(user.role)}${user.discipline ? ' / ' + escapeHtml(user.discipline) : ''}</span></span>
+        <span>Logged in as <b>${escapeHtml(user.name)}</b> 
+          ${user.role === 'admin' 
+            ? '<span class="badge" style="background:rgba(239,68,68,0.15); color:var(--bad); font-size:10px; font-weight:700;">ADMINISTRATOR</span>'
+            : `<span class="badge" style="background:rgba(59,130,246,0.15); color:var(--accent); font-size:10px">${escapeHtml(user.role)}${user.discipline ? ' / ' + escapeHtml(user.discipline) : ''} <span style="color:var(--warn); font-weight:700;">[Proj: ${escapeHtml(user.project_id || 'P1')}]</span></span>`
+          }
+        </span>
         <button id="logoutBtn" class="secondary" style="padding:4px 10px; margin:0; font-size:12px; height:28px;">Logout</button>
        </div>`
     : `<div class="userbox">

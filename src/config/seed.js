@@ -21,16 +21,20 @@ async function seed() {
         password VARCHAR(255) DEFAULT 'password123',
         role VARCHAR(50) NOT NULL,
         discipline VARCHAR(50) DEFAULT NULL,
+        project_id VARCHAR(64) DEFAULT 'P1',
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
 
     try { await conn.query(`ALTER TABLE users ADD COLUMN email VARCHAR(255) UNIQUE DEFAULT NULL`); } catch (_) {}
     try { await conn.query(`ALTER TABLE users ADD COLUMN password VARCHAR(255) DEFAULT 'password123'`); } catch (_) {}
+    try { await conn.query(`ALTER TABLE users ADD COLUMN project_id VARCHAR(64) DEFAULT 'P1'`); } catch (_) {}
+    try { await conn.query(`UPDATE users SET project_id = 'P1' WHERE project_id IS NULL OR project_id = ''`); } catch (_) {}
 
     await conn.query(`
       CREATE TABLE IF NOT EXISTS activities (
         id VARCHAR(64) PRIMARY KEY,
+        project_id VARCHAR(64) DEFAULT 'P1',
         wbs_code VARCHAR(100) DEFAULT NULL,
         level INT NOT NULL,
         parent_id VARCHAR(64) DEFAULT NULL,
@@ -46,20 +50,23 @@ async function seed() {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
 
+    try { await conn.query(`ALTER TABLE activities ADD COLUMN project_id VARCHAR(64) DEFAULT 'P1'`); } catch (_) {}
+    try { await conn.query(`UPDATE activities SET project_id = 'P1' WHERE project_id IS NULL OR project_id = ''`); } catch (_) {}
+
     const users = [
-      { id: 'u-admin', name: 'Admin User', email: 'admin@project.com', password: 'admin123', role: 'admin', discipline: null },
-      { id: 'u-planner', name: 'Rekha Iyer (Planner)', email: 'planner@project.com', password: 'planner123', role: 'planner', discipline: null },
-      { id: 'u-civil', name: 'Suresh Patel', email: 'civil@project.com', password: 'civil123', role: 'supervisor', discipline: 'civil' },
-      { id: 'u-piping', name: 'Alok Mehta', email: 'piping@project.com', password: 'piping123', role: 'supervisor', discipline: 'piping' },
-      { id: 'u-electrical', name: 'Farhan Sheikh', email: 'electrical@project.com', password: 'electrical123', role: 'supervisor', discipline: 'electrical' },
+      { id: 'u-admin', name: 'Admin User', email: 'admin@project.com', password: 'admin123', role: 'admin', discipline: null, project_id: 'P1' },
+      { id: 'u-planner', name: 'Rekha Iyer (Planner)', email: 'planner@project.com', password: 'planner123', role: 'planner', discipline: null, project_id: 'P1' },
+      { id: 'u-civil', name: 'Suresh Patel', email: 'civil@project.com', password: 'civil123', role: 'supervisor', discipline: 'civil', project_id: 'P1' },
+      { id: 'u-piping', name: 'Alok Mehta', email: 'piping@project.com', password: 'piping123', role: 'supervisor', discipline: 'piping', project_id: 'P1' },
+      { id: 'u-electrical', name: 'Farhan Sheikh', email: 'electrical@project.com', password: 'electrical123', role: 'supervisor', discipline: 'electrical', project_id: 'P1' },
     ];
 
     for (const u of users) {
       await conn.query(
-        `INSERT INTO users (id, name, email, password, role, discipline)
-         VALUES (?, ?, ?, ?, ?, ?)
-         ON DUPLICATE KEY UPDATE name=VALUES(name), email=VALUES(email), password=VALUES(password), role=VALUES(role), discipline=VALUES(discipline)`,
-        [u.id, u.name, u.email, u.password, u.role, u.discipline]
+        `INSERT INTO users (id, name, email, password, role, discipline, project_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE name=VALUES(name), email=VALUES(email), password=VALUES(password), role=VALUES(role), discipline=VALUES(discipline), project_id=VALUES(project_id)`,
+        [u.id, u.name, u.email, u.password, u.role, u.discipline, u.project_id]
       );
     }
 
@@ -70,13 +77,13 @@ async function seed() {
       const areaCivilId = uuid();
       const areaElecId = uuid();
 
-      const insertAct = `INSERT INTO activities (id, wbs_code, level, parent_id, discipline, description, planned_start, planned_end, status, source) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'not_started', 'baseline_import')`;
+      const insertAct = `INSERT INTO activities (id, project_id, wbs_code, level, parent_id, discipline, description, planned_start, planned_end, status, source) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'not_started', 'baseline_import')`;
 
-      await conn.query(insertAct, [projId, 'P1', 1, null, 'project', 'Refinery Debottlenecking Project', '2026-01-01', '2026-12-31']);
+      await conn.query(insertAct, [projId, 'P1', 'P1', 1, null, 'project', 'Refinery Debottlenecking Project', '2026-01-01', '2026-12-31']);
 
-      await conn.query(insertAct, [areaPipingId, 'P1.PIP', 3, projId, 'piping', 'Piping — Unit 24 Header', '2026-02-01', '2026-06-30']);
-      await conn.query(insertAct, [areaCivilId, 'P1.CIV', 3, projId, 'civil', 'Civil — Foundations Block B', '2026-01-15', '2026-04-30']);
-      await conn.query(insertAct, [areaElecId, 'P1.ELE', 3, projId, 'electrical', 'Electrical — Substation 3 Cabling', '2026-03-01', '2026-07-31']);
+      await conn.query(insertAct, [areaPipingId, 'P1', 'P1.PIP', 3, projId, 'piping', 'Piping — Unit 24 Header', '2026-02-01', '2026-06-30']);
+      await conn.query(insertAct, [areaCivilId, 'P1', 'P1.CIV', 3, projId, 'civil', 'Civil — Foundations Block B', '2026-01-15', '2026-04-30']);
+      await conn.query(insertAct, [areaElecId, 'P1', 'P1.ELE', 3, projId, 'electrical', 'Electrical — Substation 3 Cabling', '2026-03-01', '2026-07-31']);
 
       const leafActivities = [
         // piping
@@ -96,7 +103,7 @@ async function seed() {
       ];
 
       for (const a of leafActivities) {
-        await conn.query(insertAct, [uuid(), a.wbs_code, a.level, a.parent_id, a.discipline, a.description, a.planned_start, a.planned_end]);
+        await conn.query(insertAct, [uuid(), 'P1', a.wbs_code, a.level, a.parent_id, a.discipline, a.description, a.planned_start, a.planned_end]);
       }
     }
 
