@@ -1,74 +1,172 @@
-/**
- * In a production build this function is a single LLM call with a structured-output
- * (JSON schema) prompt: "Extract {activity_description, event_type, date, discipline}
- * from this field report." We stub that here with light heuristics so the
- * ingestion -> matching -> review pipeline can be demoed without an external API key.
- * Swapping this module for a real Anthropic API call does not change any downstream
- * contract (extracted_events schema stays identical).
- */
+const stringSimilarity = require('string-similarity');
+const db = require('../config/db');
 
-const START_WORDS = ['start', 'started', 'begin', 'began', 'commenced', 'erect', 'erected'];
-const END_WORDS = ['end', 'ended', 'complete', 'completed', 'finished', 'done', 'closed out'];
+const SYNONYMS = {
+  spool: 'line',
+  laid: 'laying',
+  termination: 'termination',
+  poured: 'pour',
+  cast: 'pour',
+  megger: 'testing',
+};
 
-function guessEventType(text) {
-  const t = text.toLowerCase();
-  if (END_WORDS.some(w => t.includes(w))) return 'end';
-  if (START_WORDS.some(w => t.includes(w))) return 'start';
-  return 'progress';
+function normalize(text) {
+  let t = (text || '').toLowerCase();
+  Object.entries(SYNONYMS).forEach(([field, plan]) => {
+    t = t.replace(new RegExp(`\\b${field}\\b`, 'g'), plan);
+  });
+  return t.replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
-function guessDate(text, fallback) {
-  if (!text && fallback) text = String(fallback);
-  if (!text) return new Date().toISOString().slice(0, 10);
-  const str = String(text).trim();
-  const iso = str.match(/\b\d{4}-\d{2}-\d{2}\b/);
-  if (iso) return iso[0];
-  const mdy = str.match(/\b(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})\b/);
-  if (mdy) {
-    const p1 = mdy[1].padStart(2, '0');
-    const p2 = mdy[2].padStart(2, '0');
-    const p3 = mdy[3];
-    // if first part > 12, assume DD/MM/YYYY
-    if (parseInt(p1, 10) > 12) return `${p3}-${p2}-${p1}`;
-    return `${p3}-${p1}-${p2}`;
+// Function to safely extract confidence score between 0.0 and 1.0
+function getScore(item) {
+  if (!item) return 0.80;
+  let s = item['AI Confidence Score'] ?? item.final_score ?? item.score ?? item.semantic_score ?? 0.80;
+  s = parseFloat(s);
+  return s > 1.0 ? s / 100.0 : s; // Convert 85 -> 0.85
+}
+
+/**
+ * Finds top-N candidate activities using the Render IPT AI Model.
+ * Resolves activity_id against local MySQL activities table by WBS code or Description.
+ * Falls back to local MySQL string similarity if Render service is unavailable.
+ */
+async function findCandidates(extractedDescription, discipline, topN = 3, projectId = null) {
+  const modelUrl = process.env.IPT_MODEL_URL;
+  const apiKey = process.env.IPT_API_KEY;
+
+  // 1. Attempt to query Render-deployed IPT AI Model
+  if (modelUrl) {
+    try {
+      const response = await fetch(`${modelUrl.replace(/\/$/, '')}/api/v1/match`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(apiKey ? { 'Authorization': `Bearer ${apiKey}` } : {})
+        },
+        body: JSON.stringify({
+          query_text: extractedDescription,
+          project_id: projectId || undefined,
+          top_k: topN
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success && result.data) {
+          const candidates = [];
+
+          // Parse top match from model
+          if (result.data.top_match) {
+            const tm = result.data.top_match;
+
+            // Resolve activity_id from local MySQL activities table
+            let dbActivityId = tm.activity_id || tm.Activity_ID;
+            try {
+              const [dbAct] = await db.query(
+                `SELECT id FROM activities WHERE (wbs_code IS NOT NULL AND wbs_code = ?) OR (description IS NOT NULL AND LOWER(description) = LOWER(?)) LIMIT 1`,
+                [tm.wbs_code || '', tm.activity_name || '']
+              );
+              if (dbAct && dbAct.length > 0) {
+                dbActivityId = dbAct[0].id;
+              }
+            } catch (err) {
+              console.warn('[DB Lookup Warning]', err.message);
+            }
+
+            candidates.push({
+              activity_id: dbActivityId,
+              wbs_code: tm.wbs_code || tm.WBS_Code || '',
+              description: tm.activity_name || tm.Activity_Name || '',
+              score: getScore(tm), // <--- Uses dynamic model score
+              schedule_status: tm['Schedule Status'],
+              delay_duration: tm['Delay/Early Duration'],
+              completion_percentage: tm['Activity Completion Percentage']
+            });
+          }
+
+          // Parse additional candidate matches
+          if (Array.isArray(result.data.candidates)) {
+            for (const c of result.data.candidates) {
+              let actId = c.activity_id || c.Activity_ID;
+              if (!candidates.some(existing => existing.activity_id === actId)) {
+                try {
+                  const [dbAct] = await db.query(
+                    `SELECT id FROM activities WHERE (wbs_code IS NOT NULL AND wbs_code = ?) OR (description IS NOT NULL AND LOWER(description) = LOWER(?)) LIMIT 1`,
+                    [c.wbs_code || '', c.activity_name || c.description || '']
+                  );
+                  if (dbAct && dbAct.length > 0) {
+                    actId = dbAct[0].id;
+                  }
+                } catch (err) {
+                  // ignore lookup error
+                }
+
+                candidates.push({
+                  activity_id: actId,
+                  wbs_code: c.wbs_code || c.WBS_Code || '',
+                  description: c.activity_name || c.Activity_Name || c.description || '',
+                  score: getScore(c), // <--- Uses dynamic model score (final_score / semantic_score)
+                  schedule_status: c['Schedule Status'],
+                  delay_duration: c['Delay/Early Duration'],
+                  completion_percentage: c['Activity Completion Percentage']
+                });
+              }
+            }
+          }
+
+          if (candidates.length > 0) {
+            return candidates.slice(0, topN);
+          }
+        }
+      }
+    } catch (err) {
+      console.warn(`[IPT Model Warning] Render model request failed (${err.message}). Falling back to local matcher.`);
+    }
   }
-  const parsed = new Date(str);
-  if (!isNaN(parsed.getTime())) return parsed.toISOString().slice(0, 10);
-  return fallback ? guessDate(String(fallback)) : new Date().toISOString().slice(0, 10);
-}
 
-/**
- * Extracts one or more structured events from a free-text field report.
- * Splits on sentence boundaries / line breaks so one report can log multiple activities.
- */
-function extractFromText(rawText, { discipline, reportDate } = {}) {
-  const segments = rawText
-    .split(/\n|(?<=[.;])\s+/)
-    .map(s => s.trim())
-    .filter(s => s.length > 4);
+  // 2. Fallback: Query local MySQL DB if Render API is unreachable
+  const [pool] = await db.query(
+    `SELECT id, wbs_code, description FROM activities WHERE LOWER(discipline) = LOWER(?) AND level >= 5`,
+    [discipline]
+  );
 
-  return segments.map(seg => ({
-    activity_description: seg.replace(/\s+/g, ' ').trim(),
-    event_type: guessEventType(seg),
-    extracted_date: guessDate(seg, reportDate),
-    extraction_confidence: 0.75, // stub: heuristic extraction is inherently less confident than LLM
+  if (!pool.length) return [];
+
+  const target = normalize(extractedDescription);
+  const scored = pool.map(a => ({
+    activity_id: a.id,
+    wbs_code: a.wbs_code,
+    description: a.description,
+    score: stringSimilarity.compareTwoStrings(target, normalize(a.description)),
   }));
+
+  scored.sort((a, b) => b.score - a.score);
+  return scored.slice(0, topN);
 }
 
-/**
- * Extracts events from a parsed spreadsheet row. Assumes caller has already
- * mapped columns to these canonical keys (activity/date/status/remarks).
- */
-function extractFromRow(row, { discipline } = {}) {
-  const desc = row.activity || row.task || row.description || '';
-  const remarks = row.remarks || row.status || '';
-  const combined = `${desc} ${remarks}`.trim();
-  return {
-    activity_description: desc || combined,
-    event_type: guessEventType(combined),
-    extracted_date: guessDate(String(row.date || ''), row.date),
-    extraction_confidence: desc ? 0.9 : 0.6, // higher confidence: structured column vs free text
-  };
+// Example helper for batch matching multiple reports at once
+async function batchMatchWithModel(items, apiKey = '') {
+  const modelUrl = process.env.IPT_MODEL_URL;
+  if (!modelUrl) return null;
+
+  const response = await fetch(`${modelUrl.replace(/\/$/, '')}/api/v1/batch-match`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(apiKey ? { 'Authorization': `Bearer ${apiKey}` } : {})
+    },
+    body: JSON.stringify({
+      items: items.map(text => ({ query_text: text, top_k: 3 }))
+    })
+  });
+
+  if (response.ok) {
+    return await response.json();
+  }
+  return null;
 }
 
-module.exports = { extractFromText, extractFromRow };
+const THRESHOLDS = { AUTO: 0.75, FLAG_NEW: 0.35 };
+
+module.exports = { findCandidates, THRESHOLDS, normalize, batchMatchWithModel };

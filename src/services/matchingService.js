@@ -18,6 +18,14 @@ function normalize(text) {
   return t.replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
+// Function to safely extract confidence score between 0.0 and 1.0
+function getScore(item) {
+  if (!item) return 0.80;
+  let s = item['AI Confidence Score'] ?? item.final_score ?? item.score ?? item.semantic_score ?? 0.80;
+  s = parseFloat(s);
+  return s > 1.0 ? s / 100.0 : s; // Convert 85 -> 0.85
+}
+
 /**
  * Finds top-N candidate activities using the Render IPT AI Model.
  * Resolves activity_id against local MySQL activities table by WBS code or Description.
@@ -26,6 +34,7 @@ function normalize(text) {
 async function findCandidates(extractedDescription, discipline, topN = 3, projectId = null) {
   const modelUrl = process.env.IPT_MODEL_URL;
   const apiKey = process.env.IPT_API_KEY;
+  
 
   // 1. Attempt to query Render-deployed IPT AI Model
   if (modelUrl) {
@@ -70,7 +79,7 @@ async function findCandidates(extractedDescription, discipline, topN = 3, projec
               activity_id: dbActivityId,
               wbs_code: tm.wbs_code || tm.WBS_Code || '',
               description: tm.activity_name || tm.Activity_Name || '',
-              score: parseFloat(tm['AI Confidence Score'] || tm.score || 0.9),
+              score: getScore(tm), // <--- Uses dynamic model score
               schedule_status: tm['Schedule Status'],
               delay_duration: tm['Delay/Early Duration'],
               completion_percentage: tm['Activity Completion Percentage']
@@ -98,7 +107,7 @@ async function findCandidates(extractedDescription, discipline, topN = 3, projec
                   activity_id: actId,
                   wbs_code: c.wbs_code || c.WBS_Code || '',
                   description: c.activity_name || c.Activity_Name || c.description || '',
-                  score: parseFloat(c['AI Confidence Score'] || c.score || 0.75),
+                  score: getScore(c), // <--- Uses dynamic model score (final_score / semantic_score)
                   schedule_status: c['Schedule Status'],
                   delay_duration: c['Delay/Early Duration'],
                   completion_percentage: c['Activity Completion Percentage']
