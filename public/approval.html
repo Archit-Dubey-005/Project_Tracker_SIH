@@ -2,7 +2,13 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Task Confirmation &amp; Supervisor Approval</title>
+  <title>Task Confirmation &amp; Supervisor Approval — SiteBridge AI</title>
+  <script>
+    (function() {
+      var t = localStorage.getItem('sitebridge_theme') || 'dark';
+      document.documentElement.setAttribute('data-theme', t);
+    })();
+  </script>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -161,7 +167,7 @@
           </div>
 
           <!-- Extraction Bar & Extracted Activity Text -->
-          <div style="background:rgba(0,0,0,0.25); border:1px solid var(--border); border-radius:8px; padding:12px; margin-bottom:14px;">
+          <div style="background:var(--card-sub); border:1px solid var(--border); border-radius:8px; padding:12px; margin-bottom:14px;">
             <div style="font-size:11px; color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px;">
               Extracted Task Event
             </div>

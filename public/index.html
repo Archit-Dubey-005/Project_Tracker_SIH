@@ -2,19 +2,25 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Progress Tracker — Authentic Credentials Login</title>
+  <title>SiteBridge AI — Authentic Credentials Login</title>
+  <script>
+    (function() {
+      var t = localStorage.getItem('sitebridge_theme') || 'dark';
+      document.documentElement.setAttribute('data-theme', t);
+    })();
+  </script>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <header class="topbar" id="topbar"></header>
   <main>
     <div style="text-align:center; padding: 10px 0 20px;">
-      <h1 style="font-size:30px; font-weight:800; background: linear-gradient(135deg, #f1f5f9 0%, #94a3b8 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Intelligent Field Progress &amp; Schedule-Linking Engine</h1>
-      <p class="sub" style="font-size:15px; max-width:620px; margin: 6px auto 0;">Infrastructure progress tracking: link site execution reports to baseline schedules with verified MySQL email &amp; password database authentication.</p>
+      <h1 style="font-size:30px; font-weight:800; background: var(--hero-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">SiteBridge AI — Intelligent Field Progress &amp; Schedule-Linking Engine</h1>
+      <p class="sub" style="font-size:15px; max-width:640px; margin: 6px auto 0;">Next-generation infrastructure intelligence: link site execution reports to baseline schedules with verified MySQL email &amp; password database authentication.</p>
     </div>
 
     <!-- Authenticated Active Session Panel -->
-    <div id="loggedInCard" class="card" style="display:none; background: linear-gradient(180deg, #131d2e 0%, #111827 100%); border-color: rgba(59,130,246,0.3); text-align:center; padding: 24px;">
+    <div id="loggedInCard" class="card card-highlight" style="display:none; border-color: rgba(59,130,246,0.3); text-align:center; padding: 24px;">
       <span class="badge confirmed" style="font-size:12px; padding: 4px 12px; margin-bottom:12px;">Active Session Authenticated</span>
       <h2 style="font-size:22px; margin: 8px 0 4px 0;" id="welcomeUser"></h2>
       <p class="muted" style="margin-bottom: 20px;" id="welcomeRole"></p>

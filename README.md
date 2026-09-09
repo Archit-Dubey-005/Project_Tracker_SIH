@@ -1,4 +1,4 @@
-# Progress Tracker — Prototype
+# SiteBridge AI — Prototype
 
 Prototype for: **Intelligent Data Capture & Schedule-Linking Layer for Infrastructure
 Project Management**. Demonstrates ingestion of free-text field reports and discipline

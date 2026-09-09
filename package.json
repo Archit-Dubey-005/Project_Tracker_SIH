@@ -1,7 +1,7 @@
 {
-  "name": "progress-tracker",
+  "name": "sitebridge-ai",
   "version": "1.0.0",
-  "description": "",
+  "description": "SiteBridge AI — Intelligent Field Progress & Schedule-Linking Engine",
   "main": "index.js",
   "scripts": {
     "seed": "node src/config/seed.js",

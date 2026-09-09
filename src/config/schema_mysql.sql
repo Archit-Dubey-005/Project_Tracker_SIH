@@ -1,5 +1,5 @@
 -- =============================================================================
--- Progress Tracker — MySQL Database Schema DDL
+-- SiteBridge AI — MySQL Database Schema DDL
 -- Compatible with MySQL 5.7+ and MySQL 8.0+
 -- =============================================================================
 

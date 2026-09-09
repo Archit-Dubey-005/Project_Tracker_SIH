@@ -2,7 +2,13 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Activity Detail — Progress Tracker</title>
+  <title>Activity Detail — SiteBridge AI</title>
+  <script>
+    (function() {
+      var t = localStorage.getItem('sitebridge_theme') || 'dark';
+      document.documentElement.setAttribute('data-theme', t);
+    })();
+  </script>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -34,11 +40,11 @@
           <div class="card">
             <b style="font-size:15px; display:block; margin-bottom:12px">Baseline Schedule Timeline</b>
             <div class="row">
-              <div style="background:#0b1120; padding:12px; border-radius:8px; border:1px solid var(--border)">
+              <div style="background:var(--card-sub); padding:12px; border-radius:8px; border:1px solid var(--border)">
                 <label style="margin-top:0">Planned Schedule Window</label>
                 <div style="font-size:15px; font-weight:600">${escapeHtml(a.planned_start || 'Not set')} &rarr; ${escapeHtml(a.planned_end || 'Not set')}</div>
               </div>
-              <div style="background:#0b1120; padding:12px; border-radius:8px; border:1px solid var(--border)">
+              <div style="background:var(--card-sub); padding:12px; border-radius:8px; border:1px solid var(--border)">
                 <label style="margin-top:0">Actual Schedule Window</label>
                 <div style="font-size:15px; font-weight:600; color:var(--good)">${escapeHtml(a.actual_start || 'Not started')} &rarr; ${escapeHtml(a.actual_end || 'In progress')}</div>
               </div>

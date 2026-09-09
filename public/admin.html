@@ -2,7 +2,13 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Admin Portal — Progress Tracker</title>
+  <title>Admin Portal — SiteBridge AI</title>
+  <script>
+    (function() {
+      var t = localStorage.getItem('sitebridge_theme') || 'dark';
+      document.documentElement.setAttribute('data-theme', t);
+    })();
+  </script>
   <link rel="stylesheet" href="style.css" />
   <style>
     .admin-nav-tabs {
@@ -55,7 +61,7 @@
     .stat-kpi {
       text-align: center;
       padding: 16px;
-      background: rgba(15, 23, 42, 0.6);
+      background: var(--card-sub);
       border: 1px solid var(--border);
       border-radius: 10px;
     }
@@ -102,7 +108,7 @@
     <!-- TAB 1: Project Tasks Status by Project ID -->
     <div id="tabTasks" class="tab-content">
       <!-- Project ID Search Bar -->
-      <div class="card" style="border-left: 4px solid var(--accent); background: linear-gradient(180deg, #131d2e 0%, #111827 100%);">
+      <div class="card card-highlight" style="border-left: 4px solid var(--accent);">
         <label style="margin-top:0; font-size:13px; color:var(--text);">Write down Project ID to inspect all task statuses:</label>
         <div style="display:flex; gap:10px; margin-top:8px; flex-wrap:wrap;">
           <input type="text" id="projectSearchInput" placeholder="Enter Project ID (e.g. P1, P2)" value="P1" style="flex:2; min-width:220px; font-weight:700; text-transform:uppercase; font-size:15px;" onkeydown="if(event.key==='Enter') loadProjectTasks()" />
@@ -297,13 +303,13 @@
 
     <!-- TAB 3: Upload Schedule -->
     <div id="tabSchedule" class="tab-content" style="display:none;">
-      <div class="card" style="border-left: 4px solid var(--accent); background: linear-gradient(180deg, #131d2e 0%, #111827 100%);">
+      <div class="card card-highlight" style="border-left: 4px solid var(--accent);">
         <b style="font-size:18px; display:block; margin-bottom:4px;">Upload Master Schedule &amp; Baseline Import</b>
         <p class="sub" style="font-size:13px; margin-bottom:18px;">Upload a master project baseline schedule file (.xlsx / .csv). Activities are parsed and attached to the target Project ID in the MySQL database.</p>
 
         <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px; align-items:flex-start;">
           <!-- Upload Form -->
-          <div style="background:rgba(0,0,0,0.25); border:1px solid var(--border); border-radius:10px; padding:18px;">
+          <div style="background:var(--card-sub); border:1px solid var(--border); border-radius:10px; padding:18px;">
             <b style="font-size:14px; display:block; margin-bottom:10px;">Select File to Import</b>
 
             <label for="scheduleTargetProjectId">Target Project ID *</label>
@@ -320,7 +326,7 @@
           </div>
 
           <!-- Template & Quick Reset Tools -->
-          <div style="background:rgba(0,0,0,0.25); border:1px solid var(--border); border-radius:10px; padding:18px;">
+          <div style="background:var(--card-sub); border:1px solid var(--border); border-radius:10px; padding:18px;">
             <b style="font-size:14px; display:block; margin-bottom:8px;">Tools &amp; Baseline Templates</b>
             <p class="sub" style="font-size:12px; margin-bottom:16px;">Download a pre-formatted schedule template with columns <code>Project ID, WBS Code, Level, Parent WBS, Discipline, Description, Planned Start, Planned End</code>.</p>
 

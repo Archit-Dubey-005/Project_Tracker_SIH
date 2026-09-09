@@ -1,5 +1,5 @@
 -- =============================================================================
--- Progress Tracker — MySQL Initial Seed Data Script
+-- SiteBridge AI — MySQL Initial Seed Data Script
 -- =============================================================================
 
 USE progress_tracker;

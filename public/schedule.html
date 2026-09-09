@@ -2,7 +2,13 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Schedule (WBS) — Progress Tracker</title>
+  <title>Schedule (WBS) — SiteBridge AI</title>
+  <script>
+    (function() {
+      var t = localStorage.getItem('sitebridge_theme') || 'dark';
+      document.documentElement.setAttribute('data-theme', t);
+    })();
+  </script>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -12,7 +18,7 @@
     <p class="sub">Hierarchical Work Breakdown Structure (L1 → L3 → L5/L6). Planned dates are imported from Primavera/MSP; actual dates update via confirmed match reviews.</p>
 
     <!-- Master Schedule Upload Section (Admin / Planner) -->
-    <div class="card" id="importCard" style="display:none; border-left: 4px solid var(--accent); background: linear-gradient(180deg, #131d2e 0%, #111827 100%);">
+    <div class="card card-highlight" id="importCard" style="display:none; border-left: 4px solid var(--accent);">
       <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:8px;">
         <div>
           <b style="font-size:16px;">Master Schedule Upload &amp; Baseline Import (Admin Access)</b>

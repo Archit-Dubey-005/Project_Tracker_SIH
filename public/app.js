@@ -9,6 +9,42 @@ const State = {
   },
 };
 
+// Theme Management (Dark / Light Mode)
+const Theme = {
+  get current() {
+    return localStorage.getItem('sitebridge_theme') || 'dark';
+  },
+  set current(val) {
+    localStorage.setItem('sitebridge_theme', val);
+    document.documentElement.setAttribute('data-theme', val);
+    this.syncUI();
+  },
+  toggle() {
+    const next = this.current === 'dark' ? 'light' : 'dark';
+    this.current = next;
+    return next;
+  },
+  init() {
+    const cur = this.current;
+    document.documentElement.setAttribute('data-theme', cur);
+  },
+  syncUI() {
+    const isDark = this.current === 'dark';
+    const label = document.getElementById('themeToggleLabel');
+    const btn = document.getElementById('themeToggleBtn');
+    if (label) {
+      label.textContent = isDark ? 'Dark Mode' : 'Light Mode';
+    }
+    if (btn) {
+      btn.setAttribute('aria-pressed', isDark ? 'true' : 'false');
+      btn.setAttribute('title', isDark ? 'Disable Dark Mode (Switch to Light Mode)' : 'Enable Dark Mode (Switch to Dark Mode)');
+    }
+  }
+};
+
+// Initialize theme immediately on script execution
+Theme.init();
+
 function escapeHtml(str) {
   if (str == null) return '';
   return String(str)
@@ -108,10 +144,74 @@ async function renderTopbar(activePage) {
         <span class="muted">Not logged in — <a href="index.html" style="color:var(--accent); font-weight:600; text-decoration:none;">Login from Homepage</a></span>
        </div>`;
 
+  const isDark = Theme.current === 'dark';
+  const themeToggleHtml = `
+    <button id="themeToggleBtn" class="theme-toggle-btn" type="button" aria-label="Toggle dark mode" aria-pressed="${isDark ? 'true' : 'false'}" title="${isDark ? 'Disable Dark Mode (Switch to Light Mode)' : 'Enable Dark Mode (Switch to Dark Mode)'}">
+      <span class="theme-toggle-track">
+        <span class="theme-toggle-thumb">
+          <svg class="theme-icon icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="4"></circle>
+            <line x1="12" y1="1" x2="12" y2="3"></line>
+            <line x1="12" y1="21" x2="12" y2="23"></line>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+            <line x1="1" y1="12" x2="3" y2="12"></line>
+            <line x1="21" y1="12" x2="23" y2="12"></line>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+          </svg>
+          <svg class="theme-icon icon-moon" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+          </svg>
+        </span>
+      </span>
+      <span class="theme-toggle-label" id="themeToggleLabel">${isDark ? 'Dark Mode' : 'Light Mode'}</span>
+    </button>
+  `;
+
   bar.innerHTML = `
-    <div class="brand"><a href="index.html" style="color:inherit; text-decoration:none;">Progress Tracker</a> <span class="pill">production</span></div>
+    <div class="topbar-left">
+      <a href="index.html" class="brand-link-wrapper" title="SiteBridge AI Homepage">
+        <!-- Logo Placeholder (Top-Left Corner) -->
+        <div class="logo-placeholder" id="logoPlaceholder" title="SiteBridge AI Logo Placeholder">
+          <div class="logo-placeholder-graphic">
+            <svg class="logo-svg" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <linearGradient id="sbLogoGrad" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+                  <stop stop-color="#2563eb" />
+                  <stop offset="1" stop-color="#0284c7" />
+                </linearGradient>
+              </defs>
+              <rect width="32" height="32" rx="8" fill="url(#sbLogoGrad)" />
+              <path d="M5 22C9 15.5 12.5 13.5 16 13.5C19.5 13.5 23 15.5 27 22" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" />
+              <path d="M8 22V17M16 22V13.5M24 22V17" stroke="#ffffff" stroke-width="1.6" stroke-linecap="round" />
+              <circle cx="16" cy="8" r="2.5" fill="#a5f3fc" />
+              <circle cx="9" cy="11" r="1.8" fill="#ffffff" />
+              <circle cx="23" cy="11" r="1.8" fill="#ffffff" />
+              <line x1="9" y1="11" x2="16" y2="8" stroke="#a5f3fc" stroke-width="1.2" stroke-dasharray="1.5 1.5" />
+              <line x1="23" y1="11" x2="16" y2="8" stroke="#a5f3fc" stroke-width="1.2" stroke-dasharray="1.5 1.5" />
+            </svg>
+          </div>
+          <span class="logo-placeholder-badge" title="Logo Placeholder">LOGO</span>
+        </div>
+        <div class="brand">
+          <span class="brand-title">SiteBridge AI</span>
+        </div>
+      </a>
+      <span class="pill">production</span>
+    </div>
     <nav>${nav}</nav>
-    ${userBoxHtml}`;
+    <div class="topbar-right">
+      ${userBoxHtml}
+      ${themeToggleHtml}
+    </div>`;
+
+  const themeToggleBtn = document.getElementById('themeToggleBtn');
+  if (themeToggleBtn) {
+    themeToggleBtn.addEventListener('click', () => {
+      Theme.toggle();
+    });
+  }
 
   const logoutBtn = document.getElementById('logoutBtn');
   if (logoutBtn) {
