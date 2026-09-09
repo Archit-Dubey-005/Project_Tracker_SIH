@@ -20,6 +20,7 @@ function normalize(text) {
 
 /**
  * Finds top-N candidate activities using the Render IPT AI Model.
+ * Resolves activity_id against local MySQL activities table by WBS code or Description.
  * Falls back to local MySQL string similarity if Render service is unavailable.
  */
 async function findCandidates(extractedDescription, discipline, topN = 3, projectId = null) {
@@ -50,8 +51,23 @@ async function findCandidates(extractedDescription, discipline, topN = 3, projec
           // Parse top match from model
           if (result.data.top_match) {
             const tm = result.data.top_match;
+
+            // Resolve activity_id from local MySQL activities table
+            let dbActivityId = tm.activity_id || tm.Activity_ID;
+            try {
+              const [dbAct] = await db.query(
+                `SELECT id FROM activities WHERE (wbs_code IS NOT NULL AND wbs_code = ?) OR (description IS NOT NULL AND LOWER(description) = LOWER(?)) LIMIT 1`,
+                [tm.wbs_code || '', tm.activity_name || '']
+              );
+              if (dbAct && dbAct.length > 0) {
+                dbActivityId = dbAct[0].id;
+              }
+            } catch (err) {
+              console.warn('[DB Lookup Warning]', err.message);
+            }
+
             candidates.push({
-              activity_id: tm.activity_id || tm.Activity_ID,
+              activity_id: dbActivityId,
               wbs_code: tm.wbs_code || tm.WBS_Code || '',
               description: tm.activity_name || tm.Activity_Name || '',
               score: parseFloat(tm['AI Confidence Score'] || tm.score || 0.9),
@@ -63,9 +79,21 @@ async function findCandidates(extractedDescription, discipline, topN = 3, projec
 
           // Parse additional candidate matches
           if (Array.isArray(result.data.candidates)) {
-            result.data.candidates.forEach(c => {
-              const actId = c.activity_id || c.Activity_ID;
+            for (const c of result.data.candidates) {
+              let actId = c.activity_id || c.Activity_ID;
               if (!candidates.some(existing => existing.activity_id === actId)) {
+                try {
+                  const [dbAct] = await db.query(
+                    `SELECT id FROM activities WHERE (wbs_code IS NOT NULL AND wbs_code = ?) OR (description IS NOT NULL AND LOWER(description) = LOWER(?)) LIMIT 1`,
+                    [c.wbs_code || '', c.activity_name || c.description || '']
+                  );
+                  if (dbAct && dbAct.length > 0) {
+                    actId = dbAct[0].id;
+                  }
+                } catch (err) {
+                  // ignore lookup error
+                }
+
                 candidates.push({
                   activity_id: actId,
                   wbs_code: c.wbs_code || c.WBS_Code || '',
@@ -76,7 +104,7 @@ async function findCandidates(extractedDescription, discipline, topN = 3, projec
                   completion_percentage: c['Activity Completion Percentage']
                 });
               }
-            });
+            }
           }
 
           if (candidates.length > 0) {
@@ -107,7 +135,6 @@ async function findCandidates(extractedDescription, discipline, topN = 3, projec
 
   scored.sort((a, b) => b.score - a.score);
   return scored.slice(0, topN);
-
 }
 
 // Example helper for batch matching multiple reports at once
@@ -131,7 +158,6 @@ async function batchMatchWithModel(items, apiKey = '') {
   }
   return null;
 }
-
 
 const THRESHOLDS = { AUTO: 0.75, FLAG_NEW: 0.35 };
 
