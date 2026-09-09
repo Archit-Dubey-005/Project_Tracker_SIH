@@ -34,8 +34,15 @@
         </select>
         <label>Report date</label>
         <input type="date" id="reportDate" />
-        <label>Field report</label>
-        <textarea id="reportText" rows="4" placeholder="e.g. Erected spool on line 24 today, north header. Also started rebar fixing on F-12."></textarea>
+
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:14px; margin-bottom:6px;">
+          <label style="margin:0;">Field report</label>
+          <button type="button" id="micBtn" class="mic-toggle-btn" title="Click to dictate field report with microphone">
+            <span style="font-size:14px;">🎙️</span>
+            <span id="micStatusText">Dictate via Mic</span>
+          </button>
+        </div>
+        <textarea id="reportText" rows="5" placeholder="e.g. Erected spool on line 24 today, north header. Also started rebar fixing on F-12. You can also click the mic button to dictate by voice!"></textarea>
         <button id="submitText">Submit</button>
       </div>
 
@@ -62,7 +69,86 @@
     (async () => {
       await renderTopbar('log.html');
       initDisciplineLocks();
+      initSpeechDictation();
     })();
+
+    function initSpeechDictation() {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      const micBtn = document.getElementById('micBtn');
+      const micStatusText = document.getElementById('micStatusText');
+      const reportText = document.getElementById('reportText');
+
+      if (!micBtn || !reportText) return;
+
+      if (!SpeechRecognition) {
+        micBtn.onclick = () => {
+          toast('Speech Recognition is not supported in this browser. Please use Google Chrome, Microsoft Edge, or Safari.');
+        };
+        return;
+      }
+
+      const recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = 'en-US';
+
+      let isListening = false;
+      let finalTranscript = '';
+      let initialText = '';
+
+      recognition.onstart = () => {
+        isListening = true;
+        micBtn.classList.add('listening');
+        micStatusText.textContent = 'Listening... (Click to Stop)';
+        toast('🎙️ Microphone active! Speak your field report...');
+      };
+
+      recognition.onresult = (event) => {
+        let interim = '';
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          if (event.results[i].isFinal) {
+            finalTranscript += event.results[i][0].transcript + ' ';
+          } else {
+            interim += event.results[i][0].transcript;
+          }
+        }
+        reportText.value = (initialText + (initialText ? ' ' : '') + finalTranscript + interim).trim();
+      };
+
+      recognition.onerror = (event) => {
+        console.warn('[Speech Recognition Error]', event.error);
+        if (event.error !== 'no-speech') {
+          toast(`Mic error: ${event.error || 'Could not capture audio'}`);
+        }
+        stopListening();
+      };
+
+      recognition.onend = () => {
+        stopListening();
+      };
+
+      micBtn.onclick = () => {
+        if (isListening) {
+          recognition.stop();
+          stopListening();
+        } else {
+          initialText = reportText.value;
+          finalTranscript = '';
+          try {
+            recognition.start();
+          } catch (err) {
+            console.error(err);
+            toast('Could not access microphone.');
+          }
+        }
+      };
+
+      function stopListening() {
+        isListening = false;
+        micBtn.classList.remove('listening');
+        micStatusText.textContent = 'Dictate via Mic';
+      }
+    }
 
     function initDisciplineLocks() {
       const user = State.user;
