@@ -19,9 +19,77 @@ function normalize(text) {
 }
 
 /**
- * Finds top-N candidate activities from MySQL database
+ * Finds top-N candidate activities using the Render IPT AI Model.
+ * Falls back to local MySQL string similarity if Render service is unavailable.
  */
-async function findCandidates(extractedDescription, discipline, topN = 3) {
+async function findCandidates(extractedDescription, discipline, topN = 3, projectId = null) {
+  const modelUrl = process.env.IPT_MODEL_URL;
+  const apiKey = process.env.IPT_API_KEY;
+
+  // 1. Attempt to query Render-deployed IPT AI Model
+  if (modelUrl) {
+    try {
+      const response = await fetch(`${modelUrl.replace(/\/$/, '')}/api/v1/match`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(apiKey ? { 'Authorization': `Bearer ${apiKey}` } : {})
+        },
+        body: JSON.stringify({
+          query_text: extractedDescription,
+          project_id: projectId || undefined,
+          top_k: topN
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success && result.data) {
+          const candidates = [];
+
+          // Parse top match from model
+          if (result.data.top_match) {
+            const tm = result.data.top_match;
+            candidates.push({
+              activity_id: tm.activity_id || tm.Activity_ID,
+              wbs_code: tm.wbs_code || tm.WBS_Code || '',
+              description: tm.activity_name || tm.Activity_Name || '',
+              score: parseFloat(tm['AI Confidence Score'] || tm.score || 0.9),
+              schedule_status: tm['Schedule Status'],
+              delay_duration: tm['Delay/Early Duration'],
+              completion_percentage: tm['Activity Completion Percentage']
+            });
+          }
+
+          // Parse additional candidate matches
+          if (Array.isArray(result.data.candidates)) {
+            result.data.candidates.forEach(c => {
+              const actId = c.activity_id || c.Activity_ID;
+              if (!candidates.some(existing => existing.activity_id === actId)) {
+                candidates.push({
+                  activity_id: actId,
+                  wbs_code: c.wbs_code || c.WBS_Code || '',
+                  description: c.activity_name || c.Activity_Name || c.description || '',
+                  score: parseFloat(c['AI Confidence Score'] || c.score || 0.75),
+                  schedule_status: c['Schedule Status'],
+                  delay_duration: c['Delay/Early Duration'],
+                  completion_percentage: c['Activity Completion Percentage']
+                });
+              }
+            });
+          }
+
+          if (candidates.length > 0) {
+            return candidates.slice(0, topN);
+          }
+        }
+      }
+    } catch (err) {
+      console.warn(`[IPT Model Warning] Render model request failed (${err.message}). Falling back to local matcher.`);
+    }
+  }
+
+  // 2. Fallback: Query local MySQL DB if Render API is unreachable
   const [pool] = await db.query(
     `SELECT id, wbs_code, description FROM activities WHERE LOWER(discipline) = LOWER(?) AND level >= 5`,
     [discipline]
@@ -39,8 +107,32 @@ async function findCandidates(extractedDescription, discipline, topN = 3) {
 
   scored.sort((a, b) => b.score - a.score);
   return scored.slice(0, topN);
+
 }
+
+// Example helper for batch matching multiple reports at once
+async function batchMatchWithModel(items, apiKey = '') {
+  const modelUrl = process.env.IPT_MODEL_URL;
+  if (!modelUrl) return null;
+
+  const response = await fetch(`${modelUrl.replace(/\/$/, '')}/api/v1/batch-match`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(apiKey ? { 'Authorization': `Bearer ${apiKey}` } : {})
+    },
+    body: JSON.stringify({
+      items: items.map(text => ({ query_text: text, top_k: 3 }))
+    })
+  });
+
+  if (response.ok) {
+    return await response.json();
+  }
+  return null;
+}
+
 
 const THRESHOLDS = { AUTO: 0.75, FLAG_NEW: 0.35 };
 
-module.exports = { findCandidates, THRESHOLDS, normalize };
+module.exports = { findCandidates, THRESHOLDS, normalize, batchMatchWithModel };
