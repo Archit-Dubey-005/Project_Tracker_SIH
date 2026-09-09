@@ -43,7 +43,21 @@ async function listQueue(req, res, next) {
 
   try {
     const [rows] = await db.query(query, params);
-    const result = rows.map(r => ({ ...r, candidates: parseCandidates(r.candidates_json) }));
+    const result = rows.map(r => {
+      const candidates = parseCandidates(r.candidates_json);
+      const topCand = candidates[0] || {};
+      
+      // Fallback to top AI candidate if MySQL activities join is NULL
+      const wbsCode = r.matched_wbs_code || topCand.wbs_code || (topCand.activity_id ? topCand.activity_id : null);
+      const wbsDesc = r.matched_wbs_description || topCand.description || topCand.activity_name || null;
+
+      return {
+        ...r,
+        candidates,
+        matched_wbs_code: wbsCode,
+        matched_wbs_description: wbsDesc
+      };
+    });
     res.json(result);
   } catch (err) {
     next(err);
