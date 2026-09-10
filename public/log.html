@@ -90,55 +90,101 @@
       const recognition = new SpeechRecognition();
       recognition.continuous = true;
       recognition.interimResults = true;
-      recognition.lang = 'en-US';
+      recognition.maxAlternatives = 1;
+      // Auto-detect browser language (e.g. en-IN, en-US, en-GB)
+      recognition.lang = navigator.language || 'en-US';
 
       let isListening = false;
-      let finalTranscript = '';
       let initialText = '';
 
       recognition.onstart = () => {
         isListening = true;
         micBtn.classList.add('listening');
-        micStatusText.textContent = 'Listening... (Click to Stop)';
-        toast('🎙️ Microphone active! Speak your field report...');
+        micStatusText.textContent = 'Listening... Speak now';
+        toast('🎙️ Microphone active! Start speaking...');
       };
 
       recognition.onresult = (event) => {
-        let interim = '';
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
+        let completedTranscript = '';
+        let interimTranscript = '';
+
+        // Iterate through all speech segments in this session
+        for (let i = 0; i < event.results.length; i++) {
+          const text = event.results[i][0].transcript;
           if (event.results[i].isFinal) {
-            finalTranscript += event.results[i][0].transcript + ' ';
+            completedTranscript += text + ' ';
           } else {
-            interim += event.results[i][0].transcript;
+            interimTranscript += text;
           }
         }
-        reportText.value = (initialText + (initialText ? ' ' : '') + finalTranscript + interim).trim();
+
+        const fullSpoken = (completedTranscript + interimTranscript).trim();
+        if (fullSpoken) {
+          reportText.value = (initialText ? initialText.trim() + ' ' : '') + fullSpoken;
+          micStatusText.textContent = 'Hearing voice...';
+        }
       };
 
       recognition.onerror = (event) => {
         console.warn('[Speech Recognition Error]', event.error);
-        if (event.error !== 'no-speech') {
-          toast(`Mic error: ${event.error || 'Could not capture audio'}`);
+        if (event.error === 'no-speech') {
+          // Silence detected - do NOT abort listening
+          return;
         }
+        if (event.error === 'not-allowed' || event.error === 'permission-denied') {
+          toast('🔒 Microphone blocked! Please allow microphone access in your browser address bar.');
+          isListening = false;
+          stopListening();
+          return;
+        }
+        if (event.error === 'network') {
+          toast('Network connection needed for speech-to-text recognition.');
+        }
+        isListening = false;
         stopListening();
       };
 
       recognition.onend = () => {
+        if (isListening) {
+          // Keep listening if Chrome auto-pauses due to momentary silence
+          try {
+            recognition.start();
+            return;
+          } catch (_) {}
+        }
         stopListening();
       };
 
-      micBtn.onclick = () => {
+      micBtn.onclick = async () => {
         if (isListening) {
-          recognition.stop();
+          isListening = false;
+          try { recognition.stop(); } catch (_) {}
           stopListening();
+          toast('🎙️ Mic stopped. Field report updated.');
         } else {
           initialText = reportText.value;
-          finalTranscript = '';
           try {
+            // Check & request browser microphone permissions explicitly
+            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+              await navigator.mediaDevices.getUserMedia({ audio: true });
+            }
+            isListening = true;
             recognition.start();
           } catch (err) {
-            console.error(err);
-            toast('Could not access microphone.');
+            console.warn('getUserMedia prompt result:', err);
+            // If already permitted or unsupported getUserMedia, attempt direct start
+            try {
+              isListening = true;
+              recognition.start();
+            } catch (e) {
+              isListening = false;
+              stopListening();
+              if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+                toast('🔒 Microphone permission denied. Click the lock icon in the URL bar to allow.');
+              } else {
+                toast('Could not access microphone: ' + (e.message || err.message));
+              }
+            }
           }
         }
       };
