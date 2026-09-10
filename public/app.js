@@ -220,6 +220,132 @@ function scoreColor(score) {
 }
 
 /**
+ * Calculates schedule variance (Delay, Early, On Time) and percentage of activity done
+ * with respect to the origin baseline timeline.
+ */
+function calculateScheduleVariance(act) {
+  const pStart = act.planned_start ? new Date(act.planned_start) : null;
+  const pEnd = act.planned_end ? new Date(act.planned_end) : null;
+  const aStart = act.actual_start ? new Date(act.actual_start) : null;
+  const aEnd = act.actual_end ? new Date(act.actual_end) : null;
+  const today = new Date();
+
+  // 1. Calculate planned & actual days
+  const plannedDays = (pStart && pEnd) ? Math.max(1, Math.round((pEnd - pStart) / 86400000) + 1) : null;
+
+  let actualDays = 0;
+  if (aStart && aEnd) {
+    actualDays = Math.max(1, Math.round((aEnd - aStart) / 86400000) + 1);
+  } else if (aStart) {
+    actualDays = Math.max(1, Math.round((today - aStart) / 86400000) + 1);
+  }
+
+  // 2. Calculate percentage of activity done
+  let pctDone = 0;
+  if (act.status === 'completed') {
+    pctDone = 100;
+  } else if (act.status === 'in_progress') {
+    if (plannedDays && actualDays) {
+      pctDone = Math.min(95, Math.max(15, Math.round((actualDays / plannedDays) * 70)));
+    } else {
+      pctDone = 50;
+    }
+  } else {
+    pctDone = 0;
+  }
+
+  // 3. Calculate schedule variance with respect to origin timeline (Delay, Early, On Time)
+  let statusType = 'not_started'; // 'delay' | 'early' | 'on_time' | 'not_started'
+  let varianceDays = 0;
+  let varianceLabel = 'Not Started';
+  let badgeClass = 'badge not_started';
+  let bannerColor = 'var(--muted)';
+  let bannerBg = 'rgba(148, 163, 184, 0.1)';
+
+  if (act.status === 'completed') {
+    if (pEnd && aEnd) {
+      varianceDays = Math.round((aEnd - pEnd) / 86400000);
+      if (varianceDays > 0) {
+        statusType = 'delay';
+        varianceLabel = `Delayed by ${varianceDays}d`;
+        badgeClass = 'badge rejected';
+        bannerColor = 'var(--bad)';
+        bannerBg = 'var(--bad-bg)';
+      } else if (varianceDays < 0) {
+        statusType = 'early';
+        varianceLabel = `Early by ${Math.abs(varianceDays)}d`;
+        badgeClass = 'badge confirmed';
+        bannerColor = 'var(--good)';
+        bannerBg = 'var(--good-bg)';
+      } else {
+        statusType = 'on_time';
+        varianceLabel = 'Completed On Time';
+        badgeClass = 'badge confirmed';
+        bannerColor = 'var(--good)';
+        bannerBg = 'var(--good-bg)';
+      }
+    } else {
+      statusType = 'on_time';
+      varianceLabel = 'Completed On Time';
+      badgeClass = 'badge confirmed';
+      bannerColor = 'var(--good)';
+      bannerBg = 'var(--good-bg)';
+    }
+  } else if (act.status === 'in_progress') {
+    if (pEnd && today > pEnd) {
+      varianceDays = Math.round((today - pEnd) / 86400000);
+      statusType = 'delay';
+      varianceLabel = `Delayed by ${varianceDays}d (Overdue)`;
+      badgeClass = 'badge rejected';
+      bannerColor = 'var(--bad)';
+      bannerBg = 'var(--bad-bg)';
+    } else if (pStart && today < pStart) {
+      varianceDays = Math.round((pStart - today) / 86400000);
+      statusType = 'early';
+      varianceLabel = `Started ${varianceDays}d Early`;
+      badgeClass = 'badge in_progress';
+      bannerColor = 'var(--accent)';
+      bannerBg = 'rgba(59, 130, 246, 0.15)';
+    } else {
+      statusType = 'on_time';
+      varianceLabel = 'On Track (On Time)';
+      badgeClass = 'badge confirmed';
+      bannerColor = 'var(--good)';
+      bannerBg = 'var(--good-bg)';
+    }
+  } else {
+    // not_started
+    if (pStart && today > pStart) {
+      varianceDays = Math.round((today - pStart) / 86400000);
+      statusType = 'delay';
+      varianceLabel = `Start Delayed by ${varianceDays}d`;
+      badgeClass = 'badge rejected';
+      bannerColor = 'var(--bad)';
+      bannerBg = 'var(--bad-bg)';
+    } else {
+      statusType = 'not_started';
+      varianceLabel = 'Scheduled (On Time)';
+      badgeClass = 'badge not_started';
+      bannerColor = 'var(--muted)';
+      bannerBg = 'rgba(148, 163, 184, 0.1)';
+    }
+  }
+
+  return {
+    plannedDays,
+    actualDays,
+    pctDone,
+    varianceDays,
+    varianceLabel,
+    statusType,
+    badgeClass,
+    bannerColor,
+    bannerBg
+  };
+}
+
+
+/**
  * Renders a 3-Color Donut / Pie Chart for Work Progress
  * Slices: Work Done (Green), Work On Going (Yellow/Amber), Work Not Started (Slate)
  */

@@ -33,20 +33,71 @@
 
       try {
         const a = await api(`/schedule/${id}`);
-        el.innerHTML = `
-          <h1>${escapeHtml(a.wbs_code)} — ${escapeHtml(a.description)}</h1>
-          <p class="sub">Discipline: <span class="badge" style="background:rgba(59,130,246,0.1); color:var(--accent)">${escapeHtml(a.discipline)}</span> &bull; Status: <span class="badge ${a.status}">${escapeHtml(a.status ? a.status.replace('_',' ') : 'not started')}</span></p>
+        const v = calculateScheduleVariance(a);
 
-          <div class="card">
-            <b style="font-size:15px; display:block; margin-bottom:12px">Baseline Schedule Timeline</b>
-            <div class="row">
-              <div style="background:var(--card-sub); padding:12px; border-radius:8px; border:1px solid var(--border)">
-                <label style="margin-top:0">Planned Schedule Window</label>
-                <div style="font-size:15px; font-weight:600">${escapeHtml(a.planned_start || 'Not set')} &rarr; ${escapeHtml(a.planned_end || 'Not set')}</div>
+        el.innerHTML = `
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px; margin-bottom:12px;">
+            <div>
+              <h1 style="margin-bottom:4px;">${escapeHtml(a.wbs_code)} — ${escapeHtml(a.description)}</h1>
+              <p class="sub" style="margin-bottom:0;">
+                Discipline: <span class="badge" style="background:rgba(59,130,246,0.1); color:var(--accent)">${escapeHtml(a.discipline)}</span> &bull; 
+                Status: <span class="badge ${a.status}">${escapeHtml(a.status ? a.status.replace('_',' ') : 'not started')}</span>
+              </p>
+            </div>
+            <div>
+              <span class="${v.badgeClass}" style="font-size:13px; padding:6px 14px; font-weight:700;">${v.varianceLabel}</span>
+            </div>
+          </div>
+
+          <!-- Timeline Variance & Activity Progress Card -->
+          <div class="card card-highlight" style="margin-bottom:16px; border-left:4px solid ${v.bannerColor};">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:14px;">
+              <div>
+                <b style="font-size:16px;">Timeline Schedule Variance &amp; Progress</b>
+                <span class="sub" style="display:block; margin:2px 0 0 0; font-size:12px;">Analyzed with respect to origin baseline timeline.</span>
               </div>
-              <div style="background:var(--card-sub); padding:12px; border-radius:8px; border:1px solid var(--border)">
+              <div style="text-align:right;">
+                <span class="muted" style="font-size:12px;">Percentage of Activity Done:</span>
+                <div style="font-size:22px; font-weight:800; color:${v.pctDone === 100 ? 'var(--good)' : v.pctDone > 0 ? 'var(--warn)' : 'var(--muted)'};">
+                  ${v.pctDone}%
+                </div>
+              </div>
+            </div>
+
+            <!-- Percentage Progress Bar -->
+            <div class="score-bar" style="height:10px; margin-bottom:16px;">
+              <div class="score-fill" style="width:${v.pctDone}%; background:${v.pctDone === 100 ? 'var(--good)' : 'linear-gradient(90deg, #3b82f6, #10b981)'};"></div>
+            </div>
+
+            <div class="row" style="gap:12px;">
+              <div style="background:var(--card-sub); padding:14px; border-radius:8px; border:1px solid var(--border); flex:1;">
+                <label style="margin-top:0">Origin Baseline Timeline</label>
+                <div style="font-size:15px; font-weight:700; color:var(--text);">
+                  ${escapeHtml(a.planned_start || 'Not set')} &rarr; ${escapeHtml(a.planned_end || 'Not set')}
+                </div>
+                <div class="muted" style="font-size:12px; margin-top:4px;">
+                  Planned Duration: <b>${v.plannedDays ? v.plannedDays + ' days' : 'N/A'}</b>
+                </div>
+              </div>
+
+              <div style="background:var(--card-sub); padding:14px; border-radius:8px; border:1px solid var(--border); flex:1;">
                 <label style="margin-top:0">Actual Schedule Window</label>
-                <div style="font-size:15px; font-weight:600; color:var(--good)">${escapeHtml(a.actual_start || 'Not started')} &rarr; ${escapeHtml(a.actual_end || 'In progress')}</div>
+                <div style="font-size:15px; font-weight:700; color:${a.actual_end ? 'var(--good)' : a.actual_start ? 'var(--warn)' : 'var(--muted)'};">
+                  ${escapeHtml(a.actual_start || 'Not started')} &rarr; ${escapeHtml(a.actual_end || (a.actual_start ? 'In progress' : 'Not started'))}
+                </div>
+                <div class="muted" style="font-size:12px; margin-top:4px;">
+                  Actual / Elapsed: <b>${v.actualDays ? v.actualDays + ' days' : '0 days'}</b>
+                </div>
+              </div>
+
+              <div style="background:var(--card-sub); padding:14px; border-radius:8px; border:1px solid var(--border); flex:1;">
+                <label style="margin-top:0">Schedule Compliance</label>
+                <div style="font-size:15px; font-weight:700; color:${v.bannerColor};">
+                  ${v.varianceLabel}
+                </div>
+                <div class="muted" style="font-size:12px; margin-top:4px;">
+                  ${v.varianceDays > 0 ? `+${v.varianceDays} days behind baseline` : v.varianceDays < 0 ? `${Math.abs(v.varianceDays)} days ahead of schedule` : 'Tracking on baseline schedule'}
+                </div>
               </div>
             </div>
           </div>

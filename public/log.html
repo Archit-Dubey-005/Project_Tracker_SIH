@@ -42,6 +42,7 @@
             <span id="micStatusText">Dictate via Mic</span>
           </button>
         </div>
+        <div id="speechLiveBanner" style="font-size:12px; color:var(--accent); font-weight:600; min-height:18px; margin-bottom:4px;"></div>
         <textarea id="reportText" rows="5" placeholder="e.g. Erected spool on line 24 today, north header. Also started rebar fixing on F-12. You can also click the mic button to dictate by voice!"></textarea>
         <button id="submitText">Submit</button>
       </div>
@@ -77,114 +78,127 @@
       const micBtn = document.getElementById('micBtn');
       const micStatusText = document.getElementById('micStatusText');
       const reportText = document.getElementById('reportText');
+      const liveBanner = document.getElementById('speechLiveBanner');
 
       if (!micBtn || !reportText) return;
 
       if (!SpeechRecognition) {
         micBtn.onclick = () => {
-          toast('Speech Recognition is not supported in this browser. Please use Google Chrome, Microsoft Edge, or Safari.');
+          toast('Speech Recognition is not supported in this browser. Please open in Google Chrome or Microsoft Edge.');
         };
         return;
       }
 
-      const recognition = new SpeechRecognition();
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      recognition.maxAlternatives = 1;
-      // Auto-detect browser language (e.g. en-IN, en-US, en-GB)
-      recognition.lang = navigator.language || 'en-US';
-
+      let recognition = null;
       let isListening = false;
-      let initialText = '';
+      let baseText = '';
 
-      recognition.onstart = () => {
-        isListening = true;
-        micBtn.classList.add('listening');
-        micStatusText.textContent = 'Listening... Speak now';
-        toast('🎙️ Microphone active! Start speaking...');
-      };
+      function buildRecognition() {
+        const r = new SpeechRecognition();
+        r.continuous = true;
+        r.interimResults = true;
+        r.maxAlternatives = 1;
+        r.lang = navigator.language || 'en-US';
 
-      recognition.onresult = (event) => {
-        let completedTranscript = '';
-        let interimTranscript = '';
+        r.onstart = () => {
+          isListening = true;
+          micBtn.classList.add('listening');
+          micStatusText.textContent = 'Listening... Speak now';
+          if (liveBanner) liveBanner.textContent = '🎙️ Microphone listening... Speak your report.';
+          toast('🎙️ Microphone active! Start speaking...');
+        };
 
-        // Iterate through all speech segments in this session
-        for (let i = 0; i < event.results.length; i++) {
-          const text = event.results[i][0].transcript;
-          if (event.results[i].isFinal) {
-            completedTranscript += text + ' ';
-          } else {
-            interimTranscript += text;
+        r.onaudiostart = () => {
+          if (liveBanner) liveBanner.textContent = '🔊 Hearing audio input... Speak clearly.';
+        };
+
+        r.onspeechstart = () => {
+          if (liveBanner) liveBanner.textContent = '🗣️ Speech detected! Transcribing...';
+        };
+
+        r.onresult = (event) => {
+          let fullSpoken = '';
+          for (let i = 0; i < event.results.length; i++) {
+            fullSpoken += event.results[i][0].transcript + ' ';
           }
-        }
+          fullSpoken = fullSpoken.trim();
 
-        const fullSpoken = (completedTranscript + interimTranscript).trim();
-        if (fullSpoken) {
-          reportText.value = (initialText ? initialText.trim() + ' ' : '') + fullSpoken;
-          micStatusText.textContent = 'Hearing voice...';
-        }
-      };
+          if (fullSpoken) {
+            reportText.value = (baseText ? baseText.trim() + ' ' : '') + fullSpoken;
+            if (liveBanner) {
+              liveBanner.textContent = `🗣️ Transcribing: "${fullSpoken.slice(-35)}"`;
+            }
+          }
+        };
 
-      recognition.onerror = (event) => {
-        console.warn('[Speech Recognition Error]', event.error);
-        if (event.error === 'no-speech') {
-          // Silence detected - do NOT abort listening
-          return;
-        }
-        if (event.error === 'not-allowed' || event.error === 'permission-denied') {
-          toast('🔒 Microphone blocked! Please allow microphone access in your browser address bar.');
-          isListening = false;
-          stopListening();
-          return;
-        }
-        if (event.error === 'network') {
-          toast('Network connection needed for speech-to-text recognition.');
-        }
-        isListening = false;
-        stopListening();
-      };
-
-      recognition.onend = () => {
-        if (isListening) {
-          // Keep listening if Chrome auto-pauses due to momentary silence
-          try {
-            recognition.start();
+        r.onerror = (event) => {
+          console.warn('[Speech Recognition Error]', event.error);
+          if (event.error === 'no-speech') {
+            if (liveBanner) liveBanner.textContent = '🎙️ Listening... (Say something)';
             return;
-          } catch (_) {}
-        }
-        stopListening();
-      };
+          }
+          if (event.error === 'not-allowed' || event.error === 'permission-denied') {
+            if (liveBanner) liveBanner.textContent = '🔒 Microphone blocked! Allow mic permissions in URL bar.';
+            toast('🔒 Microphone blocked! Please click the camera/lock icon in browser address bar to Allow.');
+            stopListening();
+            return;
+          }
+          if (event.error === 'network') {
+            if (liveBanner) liveBanner.textContent = '⚠️ Network error: Speech-to-text requires internet.';
+            toast('Internet connection required for Speech-to-Text.');
+            stopListening();
+            return;
+          }
+          if (liveBanner) liveBanner.textContent = `Mic notice: ${event.error}`;
+        };
+
+        r.onend = () => {
+          if (isListening) {
+            try {
+              r.start();
+              return;
+            } catch (_) {}
+          }
+          stopListening();
+        };
+
+        return r;
+      }
 
       micBtn.onclick = async () => {
         if (isListening) {
           isListening = false;
-          try { recognition.stop(); } catch (_) {}
+          if (recognition) {
+            try { recognition.stop(); } catch (_) {}
+          }
           stopListening();
-          toast('🎙️ Mic stopped. Field report updated.');
+          if (liveBanner) liveBanner.textContent = '✅ Speech captured and saved.';
+          toast('🎙️ Mic stopped. Field report updated!');
         } else {
-          initialText = reportText.value;
-          try {
-            // Check & request browser microphone permissions explicitly
-            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-              await navigator.mediaDevices.getUserMedia({ audio: true });
-            }
-            isListening = true;
-            recognition.start();
-          } catch (err) {
-            console.warn('getUserMedia prompt result:', err);
-            // If already permitted or unsupported getUserMedia, attempt direct start
+          baseText = reportText.value;
+
+          // Request & immediately release mic stream to unlock hardware audio access
+          if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
             try {
-              isListening = true;
-              recognition.start();
-            } catch (e) {
-              isListening = false;
-              stopListening();
-              if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-                toast('🔒 Microphone permission denied. Click the lock icon in the URL bar to allow.');
-              } else {
-                toast('Could not access microphone: ' + (e.message || err.message));
+              const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+              // Crucial: Release tracks so SpeechRecognition gets exclusive hardware microphone access!
+              stream.getTracks().forEach(t => t.stop());
+            } catch (permErr) {
+              if (permErr.name === 'NotAllowedError' || permErr.name === 'PermissionDeniedError') {
+                toast('🔒 Microphone access denied! Allow mic permission in browser URL bar.');
+                if (liveBanner) liveBanner.textContent = '🔒 Microphone permission denied by browser.';
+                return;
               }
             }
+          }
+
+          try {
+            recognition = buildRecognition();
+            recognition.start();
+          } catch (err) {
+            console.error('Failed to start speech recognition:', err);
+            toast('Could not start microphone: ' + (err.message || 'error'));
+            stopListening();
           }
         }
       };
