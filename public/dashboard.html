@@ -170,7 +170,7 @@
                     <td><span class="badge ${l.action === 'confirmed' ? 'confirmed' : l.action === 'rejected' ? 'rejected' : 'pending'}">${escapeHtml(l.action)}</span></td>
                     <td>${escapeHtml(l.details || '')}</td>
                     <td class="muted">${escapeHtml(l.actor_name || 'System')}</td>
-                    <td class="muted" style="font-size:12px">${escapeHtml(l.created_at)}</td>
+                    <td class="muted" style="font-size:12px">${escapeHtml(formatDateOnly(l.created_at))}</td>
                   </tr>
                 `).join('') || '<tr><td colspan="4" class="muted">No recent activity logged.</td></tr>'}
               </tbody>

@@ -73,7 +73,7 @@
               <div style="background:var(--card-sub); padding:14px; border-radius:8px; border:1px solid var(--border); flex:1;">
                 <label style="margin-top:0">Origin Baseline Timeline</label>
                 <div style="font-size:15px; font-weight:700; color:var(--text);">
-                  ${escapeHtml(a.planned_start || 'Not set')} &rarr; ${escapeHtml(a.planned_end || 'Not set')}
+                  ${escapeHtml(formatDateOnly(a.planned_start) || 'Not set')} &rarr; ${escapeHtml(formatDateOnly(a.planned_end) || 'Not set')}
                 </div>
                 <div class="muted" style="font-size:12px; margin-top:4px;">
                   Planned Duration: <b>${v.plannedDays ? v.plannedDays + ' days' : 'N/A'}</b>
@@ -83,7 +83,7 @@
               <div style="background:var(--card-sub); padding:14px; border-radius:8px; border:1px solid var(--border); flex:1;">
                 <label style="margin-top:0">Actual Schedule Window</label>
                 <div style="font-size:15px; font-weight:700; color:${a.actual_end ? 'var(--good)' : a.actual_start ? 'var(--warn)' : 'var(--muted)'};">
-                  ${escapeHtml(a.actual_start || 'Not started')} &rarr; ${escapeHtml(a.actual_end || (a.actual_start ? 'In progress' : 'Not started'))}
+                  ${escapeHtml(formatDateOnly(a.actual_start) || 'Not started')} &rarr; ${escapeHtml(formatDateOnly(a.actual_end) || (a.actual_start ? 'In progress' : 'Not started'))}
                 </div>
                 <div class="muted" style="font-size:12px; margin-top:4px;">
                   Actual / Elapsed: <b>${v.actualDays ? v.actualDays + ' days' : '0 days'}</b>
@@ -115,7 +115,7 @@
                   <span class="pill">${Math.round((e.similarity_score||0)*100)}% match</span>
                 </div>
                 <div class="muted" style="font-size:12px; margin-top:6px">
-                  Extracted Date: <b>${escapeHtml(e.extracted_date)}</b> &bull; Source: ${escapeHtml(e.source_type)} &bull; Submitted by: <b>${escapeHtml(e.submitted_by_name || 'Unknown')}</b> &bull; Logged: ${escapeHtml(e.created_at)}
+                  Extracted Date: <b>${escapeHtml(formatDateOnly(e.extracted_date))}</b> &bull; Source: ${escapeHtml(e.source_type)} &bull; Submitted by: <b>${escapeHtml(e.submitted_by_name || 'Unknown')}</b> &bull; Logged: ${escapeHtml(formatDateOnly(e.created_at))}
                 </div>
               </div>`).join('')
               : '<div class="muted" style="padding:12px 0;">No field actual events confirmed or linked to this baseline activity yet.</div>'}

@@ -207,8 +207,8 @@
                         <a href="javascript:void(0)" style="color:var(--text); font-weight:500; text-decoration:none;">${escapeHtml(leaf.description)}</a>
                       </td>
                       <td><span class="badge" style="background:rgba(255,255,255,0.05); color:var(--muted); font-size:10px">${escapeHtml(leaf.discipline)}</span></td>
-                      <td class="muted">${leaf.planned_start ? escapeHtml(leaf.planned_start) : '—'} &rarr; ${leaf.planned_end ? escapeHtml(leaf.planned_end) : '—'}</td>
-                      <td class="muted">${leaf.actual_start ? escapeHtml(leaf.actual_start) : '—'} &rarr; ${leaf.actual_end ? escapeHtml(leaf.actual_end) : '—'}</td>
+                      <td class="muted">${leaf.planned_start ? escapeHtml(formatDateOnly(leaf.planned_start)) : '—'} &rarr; ${leaf.planned_end ? escapeHtml(formatDateOnly(leaf.planned_end)) : '—'}</td>
+                      <td class="muted">${leaf.actual_start ? escapeHtml(formatDateOnly(leaf.actual_start)) : '—'} &rarr; ${leaf.actual_end ? escapeHtml(formatDateOnly(leaf.actual_end)) : '—'}</td>
                       <td><span class="badge ${leaf.status}">${leaf.status ? leaf.status.replace('_',' ') : 'not started'}</span></td>
                       <td><span class="${v.badgeClass}">${v.varianceLabel}</span></td>
                       <td style="min-width:110px;">
@@ -282,7 +282,7 @@
               <div style="flex:1; background:var(--card-sub); padding:12px; border-radius:8px; border:1px solid var(--border);">
                 <label style="margin-top:0; font-size:11px;">Origin Baseline Window</label>
                 <div style="font-size:13px; font-weight:700; color:var(--text); margin-top:2px;">
-                  ${escapeHtml(act.planned_start || 'Not specified')} &rarr; ${escapeHtml(act.planned_end || 'Not specified')}
+                  ${escapeHtml(formatDateOnly(act.planned_start) || 'Not specified')} &rarr; ${escapeHtml(formatDateOnly(act.planned_end) || 'Not specified')}
                 </div>
                 <div class="muted" style="font-size:11px; margin-top:4px;">
                   Planned Duration: <b>${v.plannedDays ? v.plannedDays + ' days' : 'N/A'}</b>
@@ -292,7 +292,7 @@
               <div style="flex:1; background:var(--card-sub); padding:12px; border-radius:8px; border:1px solid var(--border);">
                 <label style="margin-top:0; font-size:11px;">Actual Execution Window</label>
                 <div style="font-size:13px; font-weight:700; color:${act.actual_end ? 'var(--good)' : act.actual_start ? 'var(--warn)' : 'var(--muted)'}; margin-top:2px;">
-                  ${escapeHtml(act.actual_start || 'Not started')} &rarr; ${escapeHtml(act.actual_end || (act.actual_start ? 'In progress' : 'Not started'))}
+                  ${escapeHtml(formatDateOnly(act.actual_start) || 'Not started')} &rarr; ${escapeHtml(formatDateOnly(act.actual_end) || (act.actual_start ? 'In progress' : 'Not started'))}
                 </div>
                 <div class="muted" style="font-size:11px; margin-top:4px;">
                   Actual / Elapsed: <b>${v.actualDays ? v.actualDays + ' days' : '0 days'}</b>

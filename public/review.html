@@ -60,7 +60,7 @@
                   <b style="font-size:16px; color:var(--text); display:block; margin-bottom:4px;">${escapeHtml(item.activity_description)}</b>
                   <span class="badge ${item.status}">${escapeHtml(item.status)}</span>
                   <span class="badge" style="background:rgba(255,255,255,0.06); color:var(--muted); font-size:10px">${escapeHtml(item.event_type)}</span>
-                  <span class="muted" style="font-size:12px; margin-left:8px;">Extracted Date: <b>${escapeHtml(item.extracted_date)}</b></span>
+                  <span class="muted" style="font-size:12px; margin-left:8px;">Extracted Date: <b>${escapeHtml(formatDateOnly(item.extracted_date))}</b></span>
                 </div>
                 <div style="text-align:right">
                   <span class="badge" style="background:rgba(59,130,246,0.1); color:var(--accent)">${escapeHtml(item.discipline)}</span>

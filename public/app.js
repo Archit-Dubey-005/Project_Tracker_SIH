@@ -55,6 +55,23 @@ function escapeHtml(str) {
     .replace(/'/g, '&#039;');
 }
 
+/**
+ * Strips time, timezone (e.g. T00:00:00.000Z), and returns pure YYYY-MM-DD date.
+ */
+function formatDateOnly(val) {
+  if (!val) return '';
+  const s = String(val).trim();
+  // Match YYYY-MM-DD at the start of any date/timestamp string
+  const m = s.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (m) return m[1];
+  // If standard Date object or other date string format
+  const d = new Date(s);
+  if (!isNaN(d.getTime())) {
+    return d.toISOString().slice(0, 10);
+  }
+  return s;
+}
+
 function getApiBaseUrl() {
   if (location.protocol === 'file:') return 'http://localhost:3000';
   const isLocal = location.hostname === 'localhost' || location.hostname === '127.0.0.1';

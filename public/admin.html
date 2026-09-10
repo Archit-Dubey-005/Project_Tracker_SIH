@@ -607,8 +607,8 @@
                 ${escapeHtml(t.description)}
               </a>
             </td>
-            <td class="muted" style="font-size:12px;">${t.planned_start ? escapeHtml(t.planned_start) : '—'} &rarr; ${t.planned_end ? escapeHtml(t.planned_end) : '—'}</td>
-            <td class="muted" style="font-size:12px;">${t.actual_start ? escapeHtml(t.actual_start) : '—'} &rarr; ${t.actual_end ? escapeHtml(t.actual_end) : '—'}</td>
+            <td class="muted" style="font-size:12px;">${t.planned_start ? escapeHtml(formatDateOnly(t.planned_start)) : '—'} &rarr; ${t.planned_end ? escapeHtml(formatDateOnly(t.planned_end)) : '—'}</td>
+            <td class="muted" style="font-size:12px;">${t.actual_start ? escapeHtml(formatDateOnly(t.actual_start)) : '—'} &rarr; ${t.actual_end ? escapeHtml(formatDateOnly(t.actual_end)) : '—'}</td>
             <td>${statusBadge} ${pendingBadge}</td>
             <td style="font-size:12px; color:var(--muted);">${t.match_count || 0} logs</td>
           </tr>
@@ -773,7 +773,7 @@
           sampleHtml = `<div style="margin-top:8px; font-size:11px; opacity:0.9;">
             <b>Extracted Sample Activities:</b>
             <ul style="margin:4px 0 0 16px; padding:0;">
-              ${res.sample_activities.slice(0, 3).map(a => `<li><code>${escapeHtml(a.id)}</code> · ${escapeHtml(a.wbs_code || 'no-wbs')} · <b>${escapeHtml(a.description)}</b> (${escapeHtml(a.discipline)}) [${a.planned_start || '—'} → ${a.planned_end || '—'}]</li>`).join('')}
+              ${res.sample_activities.slice(0, 3).map(a => `<li><code>${escapeHtml(a.id)}</code> · ${escapeHtml(a.wbs_code || 'no-wbs')} · <b>${escapeHtml(a.description)}</b> (${escapeHtml(a.discipline)}) [${formatDateOnly(a.planned_start) || '—'} → ${formatDateOnly(a.planned_end) || '—'}]</li>`).join('')}
             </ul>
           </div>`;
         }
