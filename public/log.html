@@ -18,9 +18,9 @@
     <p class="sub">Type (or paste) a field report, or upload a discipline spreadsheet. Both flow through the same extraction + matching pipeline.</p>
 
     <div class="card">
-      <div class="row">
-        <button id="modeText">Text entry</button>
-        <button id="modeFile" class="secondary">Spreadsheet upload</button>
+      <div class="log-mode-tabs">
+        <button type="button" id="modeText" class="log-mode-btn active">📝 Text entry</button>
+        <button type="button" id="modeFile" class="log-mode-btn">📊 Spreadsheet upload</button>
       </div>
 
       <div id="textForm">
@@ -169,8 +169,27 @@
       }
     }
 
-    document.getElementById('modeText').onclick = () => { document.getElementById('textForm').style.display=''; document.getElementById('fileForm').style.display='none'; };
-    document.getElementById('modeFile').onclick = () => { document.getElementById('textForm').style.display='none'; document.getElementById('fileForm').style.display=''; };
+    function setLogMode(mode) {
+      const btnText = document.getElementById('modeText');
+      const btnFile = document.getElementById('modeFile');
+      const formText = document.getElementById('textForm');
+      const formFile = document.getElementById('fileForm');
+
+      if (mode === 'text') {
+        btnText.classList.add('active');
+        btnFile.classList.remove('active');
+        formText.style.display = '';
+        formFile.style.display = 'none';
+      } else {
+        btnFile.classList.add('active');
+        btnText.classList.remove('active');
+        formText.style.display = 'none';
+        formFile.style.display = '';
+      }
+    }
+
+    document.getElementById('modeText').onclick = () => setLogMode('text');
+    document.getElementById('modeFile').onclick = () => setLogMode('file');
 
     document.getElementById('submitText').onclick = async () => {
       const text = document.getElementById('reportText').value.trim();
